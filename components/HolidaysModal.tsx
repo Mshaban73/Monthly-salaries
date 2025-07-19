@@ -1,6 +1,6 @@
 // --- START OF FILE src/components/HolidaysModal.tsx ---
 
-import React, { useState } from 'react';
+import { useState } from 'react'; // <-- تعديل: إزالة React
 import { X, Plus, Trash2 } from 'lucide-react';
 import type { PublicHoliday } from '../App';
 
@@ -11,26 +11,17 @@ interface HolidaysModalProps {
     setPublicHolidays: React.Dispatch<React.SetStateAction<PublicHoliday[]>>;
 }
 
-// --- تعديل: دالة مساعدة لتحويل التاريخ إلى نص بتنسيق YYYY-MM-DD ---
-// هذه الدالة تتجاهل المنطقة الزمنية وتأخذ التاريخ كما هو
-function formatDateToYMD(dateString: string): string {
-    const date = new Date(dateString);
-    const year = date.getFullYear();
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const day = date.getDate().toString().padStart(2, '0');
+// --- تعديل: تبسيط الدالة وإزالة المتغيرات غير المستخدمة ---
+function formatDateForDisplay(dateString: string): string {
+    // هذه الدالة تتجاهل الوقت والمنطقة الزمنية وتعرض التاريخ كما هو
+    // عن طريق إنشاء كائن تاريخ جديد في منطقة UTC
+    const dateObj = new Date(dateString + 'T00:00:00Z');
     
-    // ملاحظة: هذه الطريقة قد تسبب مشاكل المنطقة الزمنية، لكنها مناسبة للعرض
-    // الحل الأفضل هو التعامل مع النصوص مباشرة
-    // لكن سنستخدمها مؤقتاً للتنسيق
-    const dateObj = new Date(dateString);
-    // نضيف الفارق الزمني للمنطقة المحلية لتصحيح التاريخ
-    const userTimezoneOffset = dateObj.getTimezoneOffset() * 60000;
-    const correctedDate = new Date(dateObj.getTime() + userTimezoneOffset);
-
-    return correctedDate.toLocaleDateString('ar-EG', {
+    return dateObj.toLocaleDateString('ar-EG', {
         year: 'numeric',
         month: 'long',
         day: 'numeric',
+        timeZone: 'UTC', // مهم جداً: يخبر الدالة أن تعرض التاريخ كما هو (UTC)
     });
 }
 
@@ -107,8 +98,7 @@ function HolidaysModal({ isOpen, onClose, publicHolidays, setPublicHolidays }: H
                                         <div className="flex flex-col">
                                             <span className="font-bold text-gray-800">{holiday.name}</span>
                                             <span className="text-sm text-gray-600">
-                                                {/* --- تعديل: استخدام الدالة الجديدة لتنسيق التاريخ بشكل صحيح --- */}
-                                                {formatDateToYMD(holiday.date)}
+                                                {formatDateForDisplay(holiday.date)}
                                             </span>
                                         </div>
                                         <button onClick={() => handleDeleteHoliday(holiday.date)} className="text-red-500 hover:text-red-700">

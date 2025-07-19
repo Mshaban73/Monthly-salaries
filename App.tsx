@@ -1,13 +1,13 @@
 // --- START OF FILE src/App.tsx ---
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react'; // <-- تعديل: إزالة React من هنا
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext'; // استيراد مزود السياق
+import { AuthProvider } from './context/AuthContext';
 
 import Layout from './components/Layout';
-import ProtectedRoute from './components/ProtectedRoute'; // استيراد الحارس
+import ProtectedRoute from './components/ProtectedRoute';
 
-import Login from './pages/Login'; // استيراد صفحة تسجيل الدخول
+import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Employees from './pages/Employees';
 import EmployeeAttendance from './pages/EmployeeAttendance';
@@ -53,61 +53,20 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          {/* المسار العام لصفحة تسجيل الدخول */}
           <Route path="/login" element={<Login />} />
-
-          {/* المسارات المحمية التي تتطلب تسجيل الدخول */}
+          
           <Route element={<ProtectedRoute />}>
-            <Route path="/" element={
-              <Layout>
-                <Dashboard employees={employees} attendanceRecords={attendanceRecords} publicHolidays={publicHolidays} setPublicHolidays={setPublicHolidays} />
-              </Layout>
-            }/>
-            <Route path="/employees" element={
-              <Layout>
-                <Employees employees={employees} setEmployees={setEmployees} />
-              </Layout>
-            }/>
-            <Route path="/attendance" element={
-              <Layout>
-                <AttendanceSummary employees={employees} attendanceRecords={attendanceRecords} publicHolidays={publicHolidays} />
-              </Layout>
-            }/>
-            <Route path="/attendance/:employeeId" element={
-              <Layout>
-                <EmployeeAttendance employees={employees} attendanceRecords={attendanceRecords} setAttendanceRecords={setAttendanceRecords} publicHolidays={publicHolidays} />
-              </Layout>
-            }/>
-            <Route path="/payroll" element={
-              <Layout>
-                <Payroll 
-                  employees={employees} 
-                  attendanceRecords={attendanceRecords}
-                  publicHolidays={publicHolidays}
-                  historicalPayrolls={historicalPayrolls}
-                  setHistoricalPayrolls={setHistoricalPayrolls}
-                  bonuses={bonuses} setBonuses={setBonuses}
-                  deductions={deductions} setDeductions={setDeductions}
-                  generalBonuses={generalBonuses} setGeneralBonuses={setGeneralBonuses}
-                  loans={loans} setLoans={setLoans}
-                />
-              </Layout>
-            }/>
-            <Route path="/history" element={
-              <Layout>
-                <History historicalPayrolls={historicalPayrolls} />
-              </Layout>
-            }/>
-            <Route path="/history/:year/:month" element={
-              <Layout>
-                <ReportView historicalPayrolls={historicalPayrolls} employees={employees} />
-              </Layout>
-            }/>
-            <Route path="/transport-costs" element={
-              <Layout>
-                <TransportCosts historicalPayrolls={historicalPayrolls} setHistoricalPayrolls={setHistoricalPayrolls} />
-              </Layout>
-            }/>
+            <Route path="/" element={<Layout><Dashboard employees={employees} attendanceRecords={attendanceRecords} publicHolidays={publicHolidays} setPublicHolidays={setPublicHolidays} /></Layout>}/>
+            <Route path="/employees" element={<Layout><Employees employees={employees} setEmployees={setEmployees} /></Layout>}/>
+            <Route path="/attendance" element={<Layout><AttendanceSummary employees={employees} attendanceRecords={attendanceRecords} publicHolidays={publicHolidays} /></Layout>}/>
+            <Route path="/attendance/:employeeId" element={<Layout><EmployeeAttendance employees={employees} attendanceRecords={attendanceRecords} setAttendanceRecords={setAttendanceRecords} publicHolidays={publicHolidays} /></Layout>}/>
+            <Route path="/payroll" element={<Layout><Payroll employees={employees} attendanceRecords={attendanceRecords} publicHolidays={publicHolidays} historicalPayrolls={historicalPayrolls} setHistoricalPayrolls={setHistoricalPayrolls} bonuses={bonuses} setBonuses={setBonuses} deductions={deductions} setDeductions={setDeductions} generalBonuses={generalBonuses} setGeneralBonuses={setGeneralBonuses} loans={loans} setLoans={setLoans} /></Layout>}/>
+            <Route path="/history" element={<Layout><History historicalPayrolls={historicalPayrolls} /></Layout>}/>
+            
+            {/* هذا السطر الآن صحيح لأن ReportViewProps تم إصلاحها */}
+            <Route path="/history/:year/:month" element={<Layout><ReportView historicalPayrolls={historicalPayrolls} employees={employees} /></Layout>}/>
+            
+            <Route path="/transport-costs" element={<Layout><TransportCosts historicalPayrolls={historicalPayrolls} setHistoricalPayrolls={setHistoricalPayrolls} /></Layout>}/>
           </Route>
         </Routes>
       </AuthProvider>
