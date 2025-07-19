@@ -11,7 +11,13 @@ export interface PayrollReport {
     bonus: number;
     deduction: number;
     netSalary: number;
-    details: any;
+    previousDue: number;
+    details: {
+        daysWorked: number;
+        totalOvertimeHours: number;
+        regularWorkDaysForDaily: number;
+        overtimeDays: number;
+    };
 }
 
 export function calculatePayroll(
@@ -19,29 +25,31 @@ export function calculatePayroll(
     attendanceRecords: AttendanceRecords,
     month: number,
     year: number,
-    monthlyVariables: { [key: string]: { bonus: number; deduction: number } },
-    publicHolidays: PublicHoliday[] // Dynamic holidays list of objects
+    monthlyVariables: { [key: string]: { bonus: number; deduction: number; previousDue?: number } },
+    publicHolidays: PublicHoliday[]
 ): PayrollReport[] {
     const report: PayrollReport[] = [];
 
     employees.forEach(employee => {
-        const hourlyRate = employee.salaryType === 'يومي' ? employee.salaryAmount / 8 : (employee.salaryAmount / 30) / 8;
-        
+        const hourlyRate = employee.salaryType === 'يومي'
+            ? employee.salaryAmount / 8
+            : (employee.salaryAmount / 30) / 8;
+
         let totalOvertimeHours = 0;
         let daysWorked = 0;
+        let overtimeDays = 0;
         let regularWorkDaysForDaily = 0;
 
-        // فترة الراتب تبدأ من 26 الشهر السابق وتنتهي في 25 الشهر المحدد
         const startDate = new Date(year, month - 2, 26);
         const endDate = new Date(year, month - 1, 25);
 
         for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
             const dateStr = d.toISOString().split('T')[0];
-            const dayOfWeek = d.getDay(); // Sunday = 0, ... , Saturday = 6
+            const dayOfWeek = d.getDay(); // 0: Sunday ... 6: Saturday
             const dayNameArabic = Object.keys(dayNameToIndex).find(key => dayNameToIndex[key] === dayOfWeek) || '';
             const isRestDay = employee.restDays.includes(dayNameArabic);
             const isPublicHoliday = publicHolidays.some(h => h.date === dateStr);
-            
+
             const attendance = attendanceRecords[dateStr];
             const workedHours = attendance ? attendance[employee.id.toString()] : undefined;
 
@@ -49,46 +57,42 @@ export function calculatePayroll(
                 daysWorked++;
 
                 if (isPublicHoliday) {
-                    // عمل يوم عطلة رسمية
-                    const extraHours = employee.salaryType === 'شهري' ? 16 : 8;
-                    totalOvertimeHours += extraHours;
-                    // لا يتم احتساب ساعات العمل الفعلية كإضافي لأن الموظف اليومي سيأخذ يوميته والموظف الشهري يأخذ راتبه
+                    totalOvertimeHours += employee.salaryType === 'شهري' ? 16 : 8;
+                    overtimeDays++;
                 } else if (dayOfWeek === 5) { // Friday
-                    // عمل يوم الجمعة (ساعتين لكل ساعة)
                     totalOvertimeHours += workedHours * 2;
+                    overtimeDays++;
                 } else if (isRestDay) {
-                     // عمل يوم راحة اسبوعية (غير الجمعة)
-                     totalOvertimeHours += workedHours * 2;
+                    totalOvertimeHours += workedHours * 2;
+                    overtimeDays++;
                 } else {
-                    // يوم عمل عادي
-                    regularWorkDaysForDaily++;
                     const workLocation = employee.workLocation.toLowerCase();
                     const isManagement = workLocation.includes('إدارة') || workLocation.includes('ادارة');
-                    
-                    let regularHoursTarget = 8;
-                    
+                    let regularHours = 8;
+
                     if (dayOfWeek === 4) { // Thursday
-                       // نهاية العمل 12 ظهراً
-                       // نفترض أن العمل من 9ص إلى 12م بالإدارة (3 ساعات) ومن 8ص إلى 12م بالمواقع (4 ساعات)
-                       const regularHoursOnThursday = isManagement ? 3 : 4;
-                       if (workedHours > regularHoursOnThursday) {
-                           totalOvertimeHours += (workedHours - regularHoursOnThursday) * 1.5;
-                       }
+                        const threshold = isManagement ? 3 : 4;
+                        if (workedHours > threshold) {
+                            totalOvertimeHours += (workedHours - threshold) * 1.5;
+                        }
                     } else {
-                       if (workedHours > regularHoursTarget) {
-                           totalOvertimeHours += (workedHours - regularHoursTarget) * 1.5;
-                       }
+                        if (workedHours > regularHours) {
+                            totalOvertimeHours += (workedHours - regularHours) * 1.5;
+                        }
                     }
+
+                    regularWorkDaysForDaily++;
                 }
             }
         }
-        
+
         const totalOvertimePay = totalOvertimeHours * hourlyRate;
-        // راتب الموظف اليومي يحسب بناء على عدد أيام العمل العادية (غير أيام الراحة والعطلات)
-        const basePay = employee.salaryType === 'شهري' ? employee.salaryAmount : regularWorkDaysForDaily * employee.salaryAmount;
-        const employeeVars = monthlyVariables[employee.id.toString()] || { bonus: 0, deduction: 0 };
-        
-        const netSalary = basePay + totalOvertimePay + employeeVars.bonus - employeeVars.deduction;
+        const basePay = employee.salaryType === 'شهري'
+            ? employee.salaryAmount
+            : regularWorkDaysForDaily * employee.salaryAmount;
+
+        const employeeVars = monthlyVariables[employee.id.toString()] || { bonus: 0, deduction: 0, previousDue: 0 };
+        const netSalary = basePay + totalOvertimePay + employeeVars.bonus - employeeVars.deduction + (employeeVars.previousDue || 0);
 
         report.push({
             employee,
@@ -97,7 +101,13 @@ export function calculatePayroll(
             bonus: employeeVars.bonus,
             deduction: employeeVars.deduction,
             netSalary,
-            details: { daysWorked, totalOvertimeHours, regularWorkDaysForDaily }
+            previousDue: employeeVars.previousDue || 0,
+            details: {
+                daysWorked,
+                totalOvertimeHours,
+                regularWorkDaysForDaily,
+                overtimeDays
+            }
         });
     });
 

@@ -1,132 +1,116 @@
+// --- START OF FILE src/App.tsx ---
+
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext'; // استيراد مزود السياق
+
 import Layout from './components/Layout';
+import ProtectedRoute from './components/ProtectedRoute'; // استيراد الحارس
+
+import Login from './pages/Login'; // استيراد صفحة تسجيل الدخول
 import Dashboard from './pages/Dashboard';
 import Employees from './pages/Employees';
-import Attendance from './pages/Attendance';
 import EmployeeAttendance from './pages/EmployeeAttendance';
 import Payroll from './pages/Payroll';
 import History from './pages/History';
 import ReportView from './pages/ReportView';
-import type { PayrollReport } from './utils/payrollCalculator';
+import TransportCosts from './pages/TransportCosts';
+import AttendanceSummary from './pages/AttendanceSummary';
 
+export interface BonusDeductionState { [employeeId: number]: number; }
+export interface GeneralBonusesState { [periodKey: string]: string; }
+export interface Loan { id: number; employeeId: number; totalAmount: number; installments: number; startDate: string; description: string; }
+export interface Employee { id: number; name: string; jobTitle: string; workLocation: string; salaryType: 'شهري' | 'يومي'; salaryAmount: number; paymentSource: string; restDays: string[]; hoursPerDay: number; isHeadOffice: boolean; transportAllowance?: number; expatriationAllowance?: number; mealAllowance?: number; housingAllowance?: number; }
+export interface AttendanceRecords { [date: string]: { [employeeId: number]: number; }; }
+export interface PublicHoliday { date: string; name: string; }
+export interface HistoricalPayroll { year: number; month: number; report?: any[]; transportCost?: number; }
 
-// Define types for shared state
-export interface Employee {
-  id: number;
-  name: string;
-  jobTitle: string;
-  workLocation: string;
-  salaryType: 'شهري' | 'يومي';
-  salaryAmount: number;
-  paymentSource: string;
-  restDays: string[];
-}
-
-export interface AttendanceRecords {
-  [date: string]: {
-    [employeeId: string]: number;
-  };
-}
-
-export interface PublicHoliday {
-  date: string;
-  name: string;
-}
-
-export interface HistoricalPayroll {
-  year: number;
-  month: number;
-  report: PayrollReport[];
-}
-
-
-const APP_DATA_KEY = 'payrollAppData_v2';
+const APP_DATA_KEY = 'payrollAppData_v3';
 
 function App() {
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecords>({});
-  const [publicHolidays, setPublicHolidays] = useState<PublicHoliday[]>([]);
-  const [historicalPayrolls, setHistoricalPayrolls] = useState<HistoricalPayroll[]>([]);
-
-  // Load state from localStorage on initial render
+  const [employees, setEmployees] = useState<Employee[]>(() => { const savedData = localStorage.getItem(APP_DATA_KEY); if (savedData) { const data = JSON.parse(savedData); return (data.employees || []).map((emp: any) => ({ ...emp, hoursPerDay: emp.hoursPerDay || 8, isHeadOffice: emp.isHeadOffice || false, })); } return []; });
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecords>(() => { const savedData = localStorage.getItem(APP_DATA_KEY); if (savedData) { return JSON.parse(savedData).attendanceRecords || {}; } return {}; });
+  const [publicHolidays, setPublicHolidays] = useState<PublicHoliday[]>(() => { const savedData = localStorage.getItem(APP_DATA_KEY); if (savedData) { return JSON.parse(savedData).publicHolidays || []; } return []; });
+  const [historicalPayrolls, setHistoricalPayrolls] = useState<HistoricalPayroll[]>(() => { const savedData = localStorage.getItem(APP_DATA_KEY); if (savedData) { return JSON.parse(savedData).historicalPayrolls || []; } return []; });
+  const [bonuses, setBonuses] = useState<BonusDeductionState>(() => { const savedData = localStorage.getItem(APP_DATA_KEY); if (savedData) { return JSON.parse(savedData).bonuses || {}; } return {}; });
+  const [deductions, setDeductions] = useState<BonusDeductionState>(() => { const savedData = localStorage.getItem(APP_DATA_KEY); if (savedData) { return JSON.parse(savedData).deductions || {}; } return {}; });
+  const [generalBonuses, setGeneralBonuses] = useState<GeneralBonusesState>(() => { const savedData = localStorage.getItem(APP_DATA_KEY); if (savedData) { return JSON.parse(savedData).generalBonuses || {}; } return {}; });
+  const [loans, setLoans] = useState<Loan[]>(() => { const savedData = localStorage.getItem(APP_DATA_KEY); if (savedData) { return JSON.parse(savedData).loans || []; } return []; });
+  
   useEffect(() => {
     try {
-      const savedData = localStorage.getItem(APP_DATA_KEY);
-      if (savedData) {
-        const { employees, attendanceRecords, publicHolidays, historicalPayrolls } = JSON.parse(savedData);
-        if (employees) setEmployees(employees);
-        if (attendanceRecords) setAttendanceRecords(attendanceRecords);
-        if (publicHolidays) setPublicHolidays(publicHolidays);
-        if (historicalPayrolls) setHistoricalPayrolls(historicalPayrolls);
-      }
-    } catch (error) {
-      console.error("Failed to load data from localStorage", error);
-    }
-  }, []);
-
-  // Save state to localStorage whenever it changes
-  useEffect(() => {
-    try {
-      const appData = JSON.stringify({ employees, attendanceRecords, publicHolidays, historicalPayrolls });
+      const appData = JSON.stringify({
+        employees, attendanceRecords, publicHolidays, historicalPayrolls,
+        bonuses, deductions, generalBonuses, loans,
+      });
       localStorage.setItem(APP_DATA_KEY, appData);
     } catch (error) {
       console.error("Failed to save data to localStorage", error);
     }
-  }, [employees, attendanceRecords, publicHolidays, historicalPayrolls]);
-
+  }, [employees, attendanceRecords, publicHolidays, historicalPayrolls, bonuses, deductions, generalBonuses, loans]);
 
   return (
     <BrowserRouter>
-      <Layout>
+      <AuthProvider>
         <Routes>
-          <Route path="/" element={
-            <Dashboard 
-              employees={employees} 
-              attendanceRecords={attendanceRecords}
-              publicHolidays={publicHolidays}
-              setPublicHolidays={setPublicHolidays}
-            />} 
-          />
-          <Route 
-            path="/employees" 
-            element={<Employees employees={employees} setEmployees={setEmployees} />} 
-          />
-          <Route 
-            path="/attendance" 
-            element={<Attendance employees={employees} />} 
-          />
-          <Route 
-            path="/attendance/:employeeId" 
-            element={
-              <EmployeeAttendance 
-                employees={employees} 
-                attendanceRecords={attendanceRecords} 
-                setAttendanceRecords={setAttendanceRecords}
-                publicHolidays={publicHolidays}
-              />}
-          />
-          <Route 
-            path="/payroll" 
-            element={
-              <Payroll 
-                employees={employees} 
-                attendanceRecords={attendanceRecords}
-                publicHolidays={publicHolidays}
-                historicalPayrolls={historicalPayrolls}
-                setHistoricalPayrolls={setHistoricalPayrolls}
-              />} 
-          />
-          <Route 
-            path="/history"
-            element={<History historicalPayrolls={historicalPayrolls} />}
-          />
-           <Route 
-            path="/history/:year/:month"
-            element={<ReportView historicalPayrolls={historicalPayrolls} />}
-          />
+          {/* المسار العام لصفحة تسجيل الدخول */}
+          <Route path="/login" element={<Login />} />
+
+          {/* المسارات المحمية التي تتطلب تسجيل الدخول */}
+          <Route element={<ProtectedRoute />}>
+            <Route path="/" element={
+              <Layout>
+                <Dashboard employees={employees} attendanceRecords={attendanceRecords} publicHolidays={publicHolidays} setPublicHolidays={setPublicHolidays} />
+              </Layout>
+            }/>
+            <Route path="/employees" element={
+              <Layout>
+                <Employees employees={employees} setEmployees={setEmployees} />
+              </Layout>
+            }/>
+            <Route path="/attendance" element={
+              <Layout>
+                <AttendanceSummary employees={employees} attendanceRecords={attendanceRecords} publicHolidays={publicHolidays} />
+              </Layout>
+            }/>
+            <Route path="/attendance/:employeeId" element={
+              <Layout>
+                <EmployeeAttendance employees={employees} attendanceRecords={attendanceRecords} setAttendanceRecords={setAttendanceRecords} publicHolidays={publicHolidays} />
+              </Layout>
+            }/>
+            <Route path="/payroll" element={
+              <Layout>
+                <Payroll 
+                  employees={employees} 
+                  attendanceRecords={attendanceRecords}
+                  publicHolidays={publicHolidays}
+                  historicalPayrolls={historicalPayrolls}
+                  setHistoricalPayrolls={setHistoricalPayrolls}
+                  bonuses={bonuses} setBonuses={setBonuses}
+                  deductions={deductions} setDeductions={setDeductions}
+                  generalBonuses={generalBonuses} setGeneralBonuses={setGeneralBonuses}
+                  loans={loans} setLoans={setLoans}
+                />
+              </Layout>
+            }/>
+            <Route path="/history" element={
+              <Layout>
+                <History historicalPayrolls={historicalPayrolls} />
+              </Layout>
+            }/>
+            <Route path="/history/:year/:month" element={
+              <Layout>
+                <ReportView historicalPayrolls={historicalPayrolls} employees={employees} />
+              </Layout>
+            }/>
+            <Route path="/transport-costs" element={
+              <Layout>
+                <TransportCosts historicalPayrolls={historicalPayrolls} setHistoricalPayrolls={setHistoricalPayrolls} />
+              </Layout>
+            }/>
+          </Route>
         </Routes>
-      </Layout>
+      </AuthProvider>
     </BrowserRouter>
   );
 }
