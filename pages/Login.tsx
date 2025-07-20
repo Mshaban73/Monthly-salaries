@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import logo from '../assets/logo.png'; // استيراد الشعار
+import logo from '../assets/logo.png';
 
 function Login() {
   const [username, setUsername] = useState('');
@@ -14,12 +14,14 @@ function Login() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    // --- منطق التحقق من اسم المستخدم وكلمة المرور ---
-    // هذا مثال بسيط جداً. في تطبيق حقيقي، يجب أن يتم التحقق من خلال API.
-    // يمكنك تغيير اسم المستخدم وكلمة المرور هنا كما تشاء.
-    if (username === 'shaban' && password === '22473') {
-      login(username); // استدعاء دالة login من AuthContext
-      navigate('/'); // توجيه المستخدم إلى لوحة التحكم
+    setError(''); // إعادة تعيين رسالة الخطأ عند كل محاولة
+
+    // --- تعديل: استخدام دالة login الجديدة التي تتحقق من كلمة المرور ---
+    // الدالة الآن تعيد true عند النجاح و false عند الفشل
+    const loginSuccessful = login(username, password);
+    
+    if (loginSuccessful) {
+      navigate('/'); // توجيه المستخدم إلى لوحة التحكم عند النجاح
     } else {
       setError('اسم المستخدم أو كلمة المرور غير صحيحة');
     }

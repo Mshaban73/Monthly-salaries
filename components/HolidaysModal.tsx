@@ -1,6 +1,6 @@
 // --- START OF FILE src/components/HolidaysModal.tsx ---
 
-import { useState } from 'react'; // <-- تعديل: إزالة React
+import React, { useState } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
 import type { PublicHoliday } from '../App';
 
@@ -9,23 +9,20 @@ interface HolidaysModalProps {
     onClose: () => void;
     publicHolidays: PublicHoliday[];
     setPublicHolidays: React.Dispatch<React.SetStateAction<PublicHoliday[]>>;
+    canEdit: boolean; // --- تعديل: استقبال صلاحية التعديل ---
 }
 
-// --- تعديل: تبسيط الدالة وإزالة المتغيرات غير المستخدمة ---
 function formatDateForDisplay(dateString: string): string {
-    // هذه الدالة تتجاهل الوقت والمنطقة الزمنية وتعرض التاريخ كما هو
-    // عن طريق إنشاء كائن تاريخ جديد في منطقة UTC
     const dateObj = new Date(dateString + 'T00:00:00Z');
-    
     return dateObj.toLocaleDateString('ar-EG', {
         year: 'numeric',
         month: 'long',
         day: 'numeric',
-        timeZone: 'UTC', // مهم جداً: يخبر الدالة أن تعرض التاريخ كما هو (UTC)
+        timeZone: 'UTC',
     });
 }
 
-function HolidaysModal({ isOpen, onClose, publicHolidays, setPublicHolidays }: HolidaysModalProps) {
+function HolidaysModal({ isOpen, onClose, publicHolidays, setPublicHolidays, canEdit }: HolidaysModalProps) {
     const [newHolidayDate, setNewHolidayDate] = useState('');
     const [newHolidayName, setNewHolidayName] = useState('');
 
@@ -47,7 +44,7 @@ function HolidaysModal({ isOpen, onClose, publicHolidays, setPublicHolidays }: H
 
     return (
         <div 
-            className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center"
+            className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4"
             onClick={onClose}
         >
             <div 
@@ -62,36 +59,39 @@ function HolidaysModal({ isOpen, onClose, publicHolidays, setPublicHolidays }: H
                 </div>
 
                 <div className="space-y-4">
-                    <div>
-                        <label htmlFor="newHolidayDate" className="block text-sm font-medium text-gray-700 mb-1">إضافة عطلة جديدة</label>
-                        <div className="flex flex-col sm:flex-row gap-2">
-                             <input
-                                type="text"
-                                id="newHolidayName"
-                                placeholder="اسم العطلة (مثال: عيد الفطر)"
-                                value={newHolidayName}
-                                onChange={e => setNewHolidayName(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                            />
-                            <input
-                                type="date"
-                                id="newHolidayDate"
-                                value={newHolidayDate}
-                                onChange={e => setNewHolidayDate(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                            />
-                            <button
-                                onClick={handleAddHoliday}
-                                className="flex items-center justify-center bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-                            >
-                                <Plus size={20} />
-                            </button>
+                    {/* --- تعديل: إخفاء فورم الإضافة إذا لم يكن هناك صلاحية --- */}
+                    {canEdit && (
+                        <div>
+                            <label htmlFor="newHolidayDate" className="block text-sm font-medium text-gray-700 mb-1">إضافة عطلة جديدة</label>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                                <input
+                                    type="text"
+                                    id="newHolidayName"
+                                    placeholder="اسم العطلة (مثال: عيد الفطر)"
+                                    value={newHolidayName}
+                                    onChange={e => setNewHolidayName(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
+                                />
+                                <input
+                                    type="date"
+                                    id="newHolidayDate"
+                                    value={newHolidayDate}
+                                    onChange={e => setNewHolidayDate(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
+                                />
+                                <button
+                                    onClick={handleAddHoliday}
+                                    className="flex items-center justify-center bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                                >
+                                    <Plus size={20} />
+                                </button>
+                            </div>
                         </div>
-                    </div>
+                    )}
 
                     <div>
                         <h3 className="text-md font-semibold text-gray-700 mb-2">قائمة العطلات</h3>
-                        <div className="max-h-60 overflow-y-auto space-y-2 pr-2">
+                        <div className="max-h-60 overflow-y-auto space-y-2 pr-2 border rounded-md p-2">
                             {publicHolidays.length > 0 ? (
                                 publicHolidays.map(holiday => (
                                     <div key={holiday.date} className="flex justify-between items-center bg-gray-50 p-3 rounded-md">
@@ -101,9 +101,12 @@ function HolidaysModal({ isOpen, onClose, publicHolidays, setPublicHolidays }: H
                                                 {formatDateForDisplay(holiday.date)}
                                             </span>
                                         </div>
-                                        <button onClick={() => handleDeleteHoliday(holiday.date)} className="text-red-500 hover:text-red-700">
-                                            <Trash2 size={18} />
-                                        </button>
+                                        {/* --- تعديل: إخفاء زر الحذف إذا لم يكن هناك صلاحية --- */}
+                                        {canEdit && (
+                                            <button onClick={() => handleDeleteHoliday(holiday.date)} className="text-red-500 hover:text-red-700">
+                                                <Trash2 size={18} />
+                                            </button>
+                                        )}
                                     </div>
                                 ))
                             ) : (

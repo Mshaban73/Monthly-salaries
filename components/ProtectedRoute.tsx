@@ -1,20 +1,36 @@
-// --- START OF FILE src/components/ProtectedRoute.tsx ---
+// --- START OF FILE src/components/ProtectedRoute.tsx (النسخة النهائية الكاملة والمصححة) ---
 
 import React from 'react';
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-function ProtectedRoute() {
-  const { user } = useAuth();
+// المكون الآن يستقبل اسم الصفحة كـ prop بالإضافة إلى children
+interface ProtectedRouteProps {
+  pageName: string;
+  children: React.ReactNode;
+}
 
-  // إذا لم يكن هناك مستخدم مسجل (user is null)، قم بإعادة التوجيه إلى صفحة تسجيل الدخول
+function ProtectedRoute({ pageName, children }: ProtectedRouteProps) {
+  const { user, can } = useAuth();
+
+  // 1. هل المستخدم مسجل دخوله أصلاً؟
   if (!user) {
+    // إذا لا، أعد توجيهه لصفحة تسجيل الدخول
     return <Navigate to="/login" replace />;
   }
 
-  // إذا كان المستخدم مسجلاً، اسمح بعرض المحتوى (الصفحة المحمية)
-  // <Outlet /> هو المكان الذي سيتم فيه عرض مكونات المسارات الفرعية (مثل Dashboard, Employees, etc.)
-  return <Outlet />;
+  // 2. هل لدى المستخدم صلاحية "view" لهذه الصفحة؟
+  if (!can('view', pageName)) {
+    // إذا لا، أظهر له رسالة "غير مصرح لك" وأعد توجيهه للصفحة الرئيسية
+    // يمكنك لاحقاً إنشاء صفحة مخصصة لـ "Access Denied"
+    // ملاحظة: تأكد أن كل المستخدمين لديهم صلاحية view للصفحة الرئيسية /
+    // لتجنب حلقة لا نهائية إذا كانت الصفحة الرئيسية هي نفسها التي يُمنع منها.
+    alert(`ليس لديك الصلاحية للوصول إلى صفحة ${pageName}`);
+    return <Navigate to="/" replace />;
+  }
+
+  // 3. إذا كان كل شيء سليماً، اعرض الصفحة المطلوبة (children)
+  return <>{children}</>;
 }
 
 export default ProtectedRoute;

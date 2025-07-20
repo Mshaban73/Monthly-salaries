@@ -1,0 +1,238 @@
+{
+  "appData": {
+    "employees": [
+      {
+        "id": 1753026644163,
+        "name": "ربيع عيد محمد سعد",
+        "jobTitle": "إداري",
+        "workLocation": "الادارة",
+        "salaryType": "شهري",
+        "paymentSource": "ربيع",
+        "restDays": [
+          "الجمعة"
+        ],
+        "salaryAmount": 14300,
+        "hoursPerDay": 8,
+        "isHeadOffice": true
+      },
+      {
+        "id": 1753026665737,
+        "name": "محمد شعبان سعد علوانى",
+        "jobTitle": "محاسب",
+        "workLocation": "الادارة",
+        "salaryType": "شهري",
+        "paymentSource": "شعبان",
+        "restDays": [
+          "الجمعة",
+          "السبت"
+        ],
+        "salaryAmount": 14400,
+        "hoursPerDay": 8,
+        "isHeadOffice": true
+      },
+      {
+        "id": 1753040964346,
+        "name": "محمد احمد عباس عبدالجيد",
+        "jobTitle": "امين مخزن",
+        "workLocation": "شيفرون",
+        "salaryType": "يومي",
+        "paymentSource": "عباس",
+        "restDays": [
+          "الجمعة"
+        ],
+        "salaryAmount": 450,
+        "hoursPerDay": 8,
+        "isHeadOffice": false
+      }
+    ],
+    "attendanceRecords": {
+      "2025-06-26": {
+        "1753026644163": {
+          "hours": 3
+        }
+      },
+      "2025-06-28": {
+        "1753026644163": {
+          "hours": 8
+        }
+      },
+      "2025-06-29": {
+        "1753026644163": {
+          "hours": 8
+        }
+      },
+      "2025-06-30": {
+        "1753026644163": {
+          "hours": 8
+        }
+      },
+      "2025-07-01": {
+        "1753026644163": {
+          "hours": 8
+        }
+      },
+      "2025-07-02": {
+        "1753026644163": {
+          "hours": 8
+        }
+      },
+      "2025-07-03": {
+        "1753026644163": {
+          "hours": 3
+        }
+      },
+      "2025-07-05": {
+        "1753026644163": {
+          "hours": 8
+        }
+      },
+      "2025-07-06": {
+        "1753026644163": {
+          "hours": 8
+        }
+      },
+      "2025-07-07": {
+        "1753026644163": {
+          "hours": 8
+        }
+      },
+      "2025-07-08": {
+        "1753026644163": {
+          "hours": 8
+        }
+      },
+      "2025-07-09": {
+        "1753026644163": {
+          "hours": 8
+        }
+      },
+      "2025-07-10": {
+        "1753026644163": {
+          "hours": 3
+        }
+      },
+      "2025-07-12": {
+        "1753026644163": {
+          "hours": 8
+        }
+      },
+      "2025-07-13": {
+        "1753026644163": {
+          "hours": 8
+        }
+      },
+      "2025-07-14": {
+        "1753026644163": {
+          "hours": 8
+        }
+      },
+      "2025-07-15": {
+        "1753026644163": {
+          "hours": 8
+        }
+      },
+      "2025-07-16": {
+        "1753026644163": {
+          "hours": 8
+        }
+      },
+      "2025-07-17": {
+        "1753026644163": {
+          "hours": 3
+        }
+      },
+      "2025-07-19": {
+        "1753026644163": {
+          "hours": 8
+        }
+      },
+      "2025-07-20": {
+        "1753026644163": {
+          "hours": 8
+        }
+      }
+    },
+    "publicHolidays": [
+      {
+        "date": "2025-01-07",
+        "name": "عيد القيامة المجيد"
+      },
+      {
+        "date": "2025-01-25",
+        "name": "عيد الشرطة المصرية"
+      }
+    ],
+    "historicalPayrolls": [],
+    "bonuses": {},
+    "deductions": {},
+    "generalBonuses": {},
+    "loans": [
+      {
+        "id": 1753026844537,
+        "employeeId": 1753026644163,
+        "totalAmount": 10000,
+        "installments": 10,
+        "startDate": "2025-03",
+        "description": ""
+      }
+    ]
+  },
+  "permissionsData": [
+    {
+      "username": "ربيع",
+      "password": "2956",
+      "permissions": [
+        {
+          "page": "Dashboard",
+          "view": true,
+          "add": false,
+          "edit": false,
+          "delete": false
+        },
+        {
+          "page": "Employees",
+          "view": true,
+          "add": false,
+          "edit": false,
+          "delete": false
+        },
+        {
+          "page": "Attendance",
+          "view": true,
+          "add": false,
+          "edit": false,
+          "delete": false
+        },
+        {
+          "page": "Payroll",
+          "view": true,
+          "add": false,
+          "edit": false,
+          "delete": false
+        },
+        {
+          "page": "Transport",
+          "view": true,
+          "add": false,
+          "edit": false,
+          "delete": false
+        },
+        {
+          "page": "History",
+          "view": true,
+          "add": false,
+          "edit": false,
+          "delete": false
+        },
+        {
+          "page": "Permissions",
+          "view": true,
+          "add": false,
+          "edit": false,
+          "delete": false
+        }
+      ]
+    }
+  ],
+  "userData": "shaban"
+}

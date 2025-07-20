@@ -2,8 +2,8 @@
 
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, CalendarDays, Wallet, History, Truck } from 'lucide-react';
-import logo from '../assets/logo.png'; // استيراد الشعار
+import { LayoutDashboard, Users, CalendarDays, Wallet, History, Truck, ShieldCheck } from 'lucide-react';
+import logo from '../assets/logo.png';
 
 const navLinks = [
   { to: '/', text: 'لوحة التحكم', icon: LayoutDashboard },
@@ -12,6 +12,8 @@ const navLinks = [
   { to: '/payroll', text: 'الرواتب', icon: Wallet },
   { to: '/history', text: 'السجل', icon: History },
   { to: '/transport-costs', text: 'تكاليف النقل', icon: Truck },
+  // --- تعديل: إضافة الرابط الجديد ---
+  { to: '/permissions', text: 'الصلاحيات', icon: ShieldCheck },
 ];
 
 function Sidebar() {
@@ -30,7 +32,7 @@ function Sidebar() {
             <li key={link.to}>
               <NavLink
                 to={link.to}
-                end // Use 'end' for the dashboard link to avoid it being active for all routes
+                end={link.to === '/'} // Use 'end' only for the dashboard link
                 className={({ isActive }) =>
                   `flex items-center px-4 py-3 my-1 rounded-lg transition-colors duration-200 ${
                     isActive

@@ -1,49 +1,81 @@
+// --- START OF FILE src/pages/History.tsx ---
+
 import React from 'react';
-import { Link } from 'react-router-dom';
-import { ChevronLeft, Archive } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 import type { HistoricalPayroll } from '../App';
+import { History as HistoryIcon, Eye, RotateCcw } from 'lucide-react';
 
 interface HistoryProps {
   historicalPayrolls: HistoricalPayroll[];
+  setHistoricalPayrolls: React.Dispatch<React.SetStateAction<HistoricalPayroll[]>>; // --- تعديل: إضافة دالة التحديث ---
 }
 
-const months = Array.from({ length: 12 }, (_, i) => ({ value: i + 1, name: new Date(0, i).toLocaleString('ar', { month: 'long' }) }));
+function History({ historicalPayrolls, setHistoricalPayrolls }: HistoryProps) {
+  const navigate = useNavigate();
 
-function History({ historicalPayrolls }: HistoryProps) {
+  const handleReopen = (year: number, month: number) => {
+    if (window.confirm(`هل أنت متأكد من إلغاء ترحيل كشف رواتب شهر ${month}/${year}؟\nسيتم حذف هذا التقرير من السجل وستتم إعادتك لصفحة الرواتب لإعادة حسابه.`)) {
+      
+      const updatedHistory = historicalPayrolls.filter(p => 
+        !(p.year === year && p.month === month)
+      );
+      setHistoricalPayrolls(updatedHistory);
+      
+      // إعادة توجيه المستخدم لصفحة الرواتب مع تحديد الشهر والسنة
+      // ملاحظة: هذا يتطلب تحديثاً في App.tsx لتمرير دالة التحديث
+      // سنفترض أنها موجودة حالياً
+      navigate(`/payroll?year=${year}&month=${month}`);
+    }
+  };
+
+
   const sortedPayrolls = [...historicalPayrolls].sort((a, b) => {
     if (a.year !== b.year) return b.year - a.year;
     return b.month - a.month;
   });
 
   return (
-    <div>
-      <h2 className="text-3xl font-bold text-gray-800 mb-6">سجل الرواتب المعتمدة</h2>
-      
-      <div className="bg-white p-6 rounded-xl shadow-lg">
+    <div className="p-4 md:p-6">
+      <div className="flex items-center gap-4 mb-6">
+        <HistoryIcon size={32} className="text-blue-600"/>
+        <h2 className="text-3xl font-bold text-gray-800">سجل الرواتب المحفوظة</h2>
+      </div>
+
+      <div className="bg-white p-6 rounded-lg shadow-md">
         {sortedPayrolls.length > 0 ? (
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {sortedPayrolls.map((payroll) => (
-              <Link
-                key={`${payroll.year}-${payroll.month}`}
-                to={`/history/${payroll.year}/${payroll.month}`}
-                className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-blue-100 hover:border-blue-400 transition-all duration-200 shadow-sm"
-              >
-                <div className="font-semibold text-lg text-gray-800">
-                  كشف رواتب شهر {months.find(m => m.value === payroll.month)?.name} {payroll.year}
-                  {payroll.transportCost !== undefined && (
-                    <span className="ml-4 text-sm text-green-700"> - تكلفة النقل: {payroll.transportCost} جنيه</span>
-                  )}
+              <div key={`${payroll.year}-${payroll.month}`} className="border p-4 rounded-lg shadow-sm bg-gray-50 flex flex-col justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-800">
+                    شهر: {new Date(payroll.year, payroll.month - 1).toLocaleString('ar', { month: 'long' })}
+                  </h3>
+                  <p className="text-md text-gray-600 mb-4">{payroll.year}</p>
                 </div>
-                <ChevronLeft className="text-gray-500" />
-              </Link>
+                <div className="flex flex-col space-y-2">
+                  <Link
+                    to={`/history/${payroll.year}/${payroll.month}`}
+                    className="flex items-center justify-center w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+                  >
+                    <Eye size={18} className="ml-2" />
+                    عرض التقرير
+                  </Link>
+                  {/* --- تعديل: إضافة زر إلغاء الترحيل --- */}
+                  <button
+                    onClick={() => handleReopen(payroll.year, payroll.month)}
+                    className="flex items-center justify-center w-full bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition"
+                  >
+                    <RotateCcw size={18} className="ml-2" />
+                    إلغاء الترحيل
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
         ) : (
-          <div className="text-center py-16 text-gray-500">
-            <Archive size={48} className="mx-auto mb-4 text-gray-400" />
-            <h3 className="text-xl font-semibold">لا توجد سجلات محفوظة</h3>
-            <p className="mt-2">يمكنك حفظ كشوف الرواتب بعد حسابها من صفحة "الرواتب" أو تكلفة النقل من "حساب تكلفة النقل".</p>
-          </div>
+          <p className="text-center text-gray-500 py-10">
+            لا توجد تقارير رواتب محفوظة في السجل بعد.
+          </p>
         )}
       </div>
     </div>

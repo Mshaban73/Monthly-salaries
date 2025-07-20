@@ -3,14 +3,16 @@
 import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import type { Employee, AttendanceRecords, PublicHoliday } from '../App';
-// --- تعديل: استيراد الدوال الموحدة الجديدة ---
 import { 
     calculateAttendanceSummary, 
     getPayrollDays, 
     getYearsList, 
-    getMonthsList 
+    getMonthsList,
+    calculateLocationSummary,
+    LocationSummary 
 } from '../utils/attendanceCalculator';
-import { Clock } from 'lucide-react';
+import { Clock, MapPin, Search } from 'lucide-react';
+import { useAuth } from '../context/AuthContext'; // --- تعديل: استيراد useAuth ---
 
 interface AttendanceSummaryProps {
     employees: Employee[];
@@ -18,62 +20,57 @@ interface AttendanceSummaryProps {
     publicHolidays: PublicHoliday[];
 }
 
-// --- تعديل: استخدام الدوال الموحدة لإنشاء القوائم ---
 const months = getMonthsList();
 const years = getYearsList();
 
-// دالة مساعدة لتنسيق عرض خلايا الإضافي
-const formatOvertimeCell = (overtime: { rawHours: number, calculatedValue: number }) => {
-    if (overtime.rawHours === 0) {
-        return <span className="text-gray-400">-</span>;
-    }
-    return (
-        <div className="flex flex-col items-center">
-            <span className="font-bold text-lg">{overtime.calculatedValue.toFixed(1)}</span>
-            <span className="text-xs text-gray-500">({overtime.rawHours.toFixed(1)} س)</span>
-        </div>
-    );
-};
+const formatOvertimeCell = (overtime: { rawHours: number, calculatedValue: number }) => { if (overtime.rawHours === 0) { return <span className="text-gray-400">-</span>; } return (<div className="flex flex-col items-center"><span className="font-bold text-lg">{overtime.calculatedValue.toFixed(1)}</span><span className="text-xs text-gray-500">({overtime.rawHours.toFixed(1)} س)</span></div>); };
+const LocationDistribution = ({ summary }: { summary: LocationSummary }) => { const entries = Object.entries(summary); if (entries.length === 0) { return <span className="text-gray-400">-</span>; } return (<div className="flex flex-col items-start text-xs space-y-1">{entries.map(([location, days]) => (<div key={location} className="flex items-center gap-2 bg-gray-100 px-2 py-1 rounded"><MapPin size={12} className="text-gray-500" /><span className="font-semibold text-gray-800">{location}:</span><span className="text-blue-600 font-bold">{days} يوم</span></div>))}</div>); };
+
 
 function AttendanceSummary({ employees, attendanceRecords, publicHolidays }: AttendanceSummaryProps) {
-    const [selectedPeriod, setSelectedPeriod] = useState({
-        month: new Date().getMonth() + 1,
-        year: new Date().getFullYear(),
-    });
+    const [selectedPeriod, setSelectedPeriod] = useState({ month: new Date().getMonth() + 1, year: new Date().getFullYear(), });
+    const [searchTerm, setSearchTerm] = useState('');
+    const { can } = useAuth(); // --- تعديل: الوصول إلى دالة التحقق من الصلاحيات ---
 
-    // --- تعديل: استخدام الدالة الموحدة لحساب أيام كشف الراتب ---
-    const payrollDays = useMemo(() => {
-        return getPayrollDays(selectedPeriod.year, selectedPeriod.month);
-    }, [selectedPeriod]);
+    const payrollDays = useMemo(() => getPayrollDays(selectedPeriod.year, selectedPeriod.month), [selectedPeriod]);
 
     const employeesSummary = useMemo(() => {
-        return employees.map(employee => {
+        const filteredEmployees = employees.filter(emp => 
+            emp.name.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+
+        return filteredEmployees.map(employee => {
             const summary = calculateAttendanceSummary(employee, attendanceRecords, publicHolidays, payrollDays);
-            return { ...employee, summary };
+            const locationSummary = calculateLocationSummary(employee, attendanceRecords, payrollDays);
+            return { ...employee, summary, locationSummary };
         });
-    }, [employees, attendanceRecords, publicHolidays, payrollDays]);
+    }, [employees, attendanceRecords, publicHolidays, payrollDays, searchTerm]);
 
     return (
         <div className="p-4 md:p-6">
             <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-6">ملخص حضور الموظفين</h2>
             
             <div className="bg-white p-4 md:p-6 rounded-lg shadow-md mb-6">
-                 <h3 className="text-lg font-semibold text-gray-700 mb-4">اختر فترة العرض</h3>
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                     <select 
-                         value={selectedPeriod.month} 
-                         onChange={e => setSelectedPeriod({...selectedPeriod, month: Number(e.target.value)})} 
-                         className="w-full bg-gray-50 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                     >
-                         {months.map(m => <option key={m.value} value={m.value}>{m.name}</option>)}
-                     </select>
-                     <select 
-                         value={selectedPeriod.year} 
-                         onChange={e => setSelectedPeriod({...selectedPeriod, year: Number(e.target.value)})} 
-                         className="w-full bg-gray-50 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                     >
-                         {years.map(y => <option key={y} value={y}>{y}</option>)}
-                     </select>
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                     <div>
+                        <label className="text-sm font-medium text-gray-700">الشهر</label>
+                        <select value={selectedPeriod.month} onChange={e => setSelectedPeriod({...selectedPeriod, month: Number(e.target.value)})} className="w-full mt-1 bg-gray-50 px-3 py-2 border border-gray-300 rounded-md">{months.map(m => <option key={m.value} value={m.value}>{m.name}</option>)}</select>
+                     </div>
+                     <div>
+                        <label className="text-sm font-medium text-gray-700">السنة</label>
+                        <select value={selectedPeriod.year} onChange={e => setSelectedPeriod({...selectedPeriod, year: Number(e.target.value)})} className="w-full mt-1 bg-gray-50 px-3 py-2 border border-gray-300 rounded-md">{years.map(y => <option key={y} value={y}>{y}</option>)}</select>
+                     </div>
+                     <div className="relative">
+                        <label className="text-sm font-medium text-gray-700">بحث بالاسم</label>
+                        <Search className="absolute right-3 top-[43px] -translate-y-1/2 text-gray-400" size={20} />
+                        <input
+                            type="text"
+                            placeholder="اكتب اسم الموظف..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full mt-1 bg-gray-50 px-3 py-2 pr-10 border border-gray-300 rounded-md"
+                        />
+                     </div>
                  </div>
             </div>
 
@@ -82,12 +79,12 @@ function AttendanceSummary({ employees, attendanceRecords, publicHolidays }: Att
                     <thead className="bg-gray-100">
                         <tr>
                             <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-600 uppercase tracking-wider">اسم الموظف</th>
-                            <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase tracking-wider">نوع الراتب</th>
                             <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase tracking-wider">أيام الحضور</th>
-                            <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase tracking-wider">إضافي عمل (مُحتسب)</th>
-                            <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase tracking-wider">إضافي خميس (مُحتسب)</th>
-                            <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase tracking-wider">إضافي راحة (مُحتسب)</th>
-                            <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase tracking-wider">إضافي عطلة (مُحتسب)</th>
+                            <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-600 uppercase tracking-wider">توزيع الحضور بالموقع</th>
+                            <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase tracking-wider">إضافي عمل</th>
+                            <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase tracking-wider">إضافي خميس</th>
+                            <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase tracking-wider">إضافي راحة</th>
+                            <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase tracking-wider">إضافي عطلة</th>
                             <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-blue-800 bg-blue-100 uppercase tracking-wider">إجمالي الساعات المحتسبة</th>
                         </tr>
                     </thead>
@@ -95,26 +92,22 @@ function AttendanceSummary({ employees, attendanceRecords, publicHolidays }: Att
                         {employeesSummary.map(emp => (
                             <tr key={emp.id} className="hover:bg-gray-50 transition-colors duration-150">
                                 <td className="px-4 py-4 whitespace-nowrap">
-                                    <Link to={`/attendance/${emp.id}`} className="font-medium text-blue-600 hover:text-blue-800 hover:underline">
-                                        {emp.name}
-                                    </Link>
-                                </td>
-                                <td className="px-4 py-4 whitespace-nowrap text-center">
-                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${emp.salaryType === 'شهري' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                                        {emp.salaryType}
-                                    </span>
+                                    {/* --- تعديل: التحقق من صلاحية "edit" قبل عرض الرابط --- */}
+                                    {can('edit', 'Attendance') ? (
+                                        <Link to={`/attendance/${emp.id}`} className="font-medium text-blue-600 hover:text-blue-800 hover:underline">
+                                            {emp.name}
+                                        </Link>
+                                    ) : (
+                                        <span className="font-medium text-gray-800">{emp.name}</span>
+                                    )}
                                 </td>
                                 <td className="px-4 py-4 whitespace-nowrap text-center text-gray-800 font-semibold">{emp.summary.actualAttendanceDays}</td>
+                                <td className="px-4 py-4 whitespace-nowrap"><LocationDistribution summary={emp.locationSummary} /></td>
                                 <td className="px-4 py-4 whitespace-nowrap text-center">{formatOvertimeCell(emp.summary.weekdayOvertime)}</td>
                                 <td className="px-4 py-4 whitespace-nowrap text-center">{formatOvertimeCell(emp.summary.thursdayOvertime)}</td>
                                 <td className="px-4 py-4 whitespace-nowrap text-center text-green-700">{formatOvertimeCell(emp.summary.restDayOvertime)}</td>
                                 <td className="px-4 py-4 whitespace-nowrap text-center text-purple-700">{formatOvertimeCell(emp.summary.holidayOvertime)}</td>
-                                <td className="px-4 py-4 whitespace-nowrap text-center text-blue-800 bg-blue-50">
-                                    <div className="flex items-center justify-center font-bold text-lg">
-                                        <Clock size={16} className="mr-2" />
-                                        {emp.summary.totalOvertimeValue.toFixed(1)}
-                                    </div>
-                                </td>
+                                <td className="px-4 py-4 whitespace-nowrap text-center text-blue-800 bg-blue-50"><div className="flex items-center justify-center font-bold text-lg"><Clock size={16} className="mr-2" />{emp.summary.totalOvertimeValue.toFixed(1)}</div></td>
                             </tr>
                         ))}
                     </tbody>
