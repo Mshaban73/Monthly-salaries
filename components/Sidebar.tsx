@@ -1,22 +1,24 @@
-// --- START OF FILE src/components/Sidebar.tsx ---
+// --- START OF FILE src/components/Sidebar.tsx (النسخة النهائية والمصححة) ---
 
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, CalendarDays, Wallet, History, Truck, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, Users, CalendarDays, Wallet, History, Truck, ShieldCheck, FileText } from 'lucide-react';
+import { useAuth } from '../context/AuthContext'; // <-- استيراد useAuth
 import logo from '../assets/logo.png';
 
 const navLinks = [
-  { to: '/', text: 'لوحة التحكم', icon: LayoutDashboard },
-  { to: '/employees', text: 'الموظفين', icon: Users },
-  { to: '/attendance', text: 'الحضور', icon: CalendarDays },
-  { to: '/payroll', text: 'الرواتب', icon: Wallet },
-  { to: '/history', text: 'السجل', icon: History },
-  { to: '/transport-costs', text: 'تكاليف النقل', icon: Truck },
-  // --- تعديل: إضافة الرابط الجديد ---
-  { to: '/permissions', text: 'الصلاحيات', icon: ShieldCheck },
+  { to: '/', text: 'لوحة التحكم', icon: LayoutDashboard, page: 'Dashboard' },
+  { to: '/employees', text: 'الموظفين', icon: Users, page: 'Employees' },
+  { to: '/attendance', text: 'ملخص الحضور', icon: CalendarDays, page: 'AttendanceSummary' }, // تم تعديل الاسم ليتوافق مع App.tsx
+  { to: '/payroll', text: 'الرواتب', icon: Wallet, page: 'Payroll' },
+  { to: '/history', text: 'السجل', icon: History, page: 'History' },
+  { to: '/transport-costs', text: 'تكاليف النقل', icon: Truck, page: 'Transport' },
+  { to: '/permissions', text: 'الصلاحيات', icon: ShieldCheck, page: 'Permissions' },
 ];
 
 function Sidebar() {
+  const { can } = useAuth(); // <-- استخدام useAuth للحصول على دالة الصلاحيات
+
   return (
     <aside className="w-64 bg-gray-800 text-white flex flex-col">
       <div className="flex flex-col items-center p-6 border-b border-gray-700">
@@ -29,22 +31,25 @@ function Sidebar() {
       <nav className="flex-1 px-4 py-6">
         <ul>
           {navLinks.map((link) => (
-            <li key={link.to}>
-              <NavLink
-                to={link.to}
-                end={link.to === '/'} // Use 'end' only for the dashboard link
-                className={({ isActive }) =>
-                  `flex items-center px-4 py-3 my-1 rounded-lg transition-colors duration-200 ${
-                    isActive
-                      ? 'bg-blue-600 text-white'
-                      : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-                  }`
-                }
-              >
-                <link.icon size={20} className="ml-4" />
-                <span className="font-medium">{link.text}</span>
-              </NavLink>
-            </li>
+            // التحقق من الصلاحية قبل عرض الرابط
+            can('view', link.page) && (
+              <li key={link.to}>
+                <NavLink
+                  to={link.to}
+                  end={link.to === '/'}
+                  className={({ isActive }) =>
+                    `flex items-center px-4 py-3 my-1 rounded-lg transition-colors duration-200 ${
+                      isActive
+                        ? 'bg-blue-600 text-white'
+                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }`
+                  }
+                >
+                  <link.icon size={20} className="ml-4" />
+                  <span className="font-medium">{link.text}</span>
+                </NavLink>
+              </li>
+            )
           ))}
         </ul>
       </nav>

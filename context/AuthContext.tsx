@@ -1,115 +1,124 @@
-// --- START OF FILE src/context/AuthContext.tsx ---
+// --- START OF FILE src/context/AuthContext.tsx (النسخة النهائية والجديدة) ---
 
-import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
-// --- تعديل: استيراد الواجهات من المصدر المركزي الصحيح ---
-import { UserPermissions, Permission } from '../App';
-
-export const PERMISSIONS_KEY = 'user_permissions_v1';
-
-// Interfaces
-interface AuthenticatedUser {
-  name: string;
-  permissions: UserPermissions;
-  isSuperAdmin: boolean;
-}
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import type { UserPermissions } from '../App';
 
 interface AuthContextType {
-  user: AuthenticatedUser | null;
-  login: (username: string, password?: string) => boolean;
-  logout: () => void;
-  can: (action: keyof Omit<Permission, 'page'>, page: string) => boolean;
-  userPermissions: UserPermissions[];
-  setUserPermissions: React.Dispatch<React.SetStateAction<UserPermissions[]>>;
+    user: UserPermissions | null;
+    userPermissions: UserPermissions[];
+    setUserPermissions: React.Dispatch<React.SetStateAction<UserPermissions[]>>;
+    login: (username: string, password?: string) => boolean;
+    logout: () => void;
+    can: (action: 'view' | 'add' | 'edit' | 'delete', page: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const defaultPages = ['Dashboard', 'Employees', 'Attendance', 'Payroll', 'Transport', 'History', 'Permissions'];
-
-const superAdminPermissions = (username: string): UserPermissions => ({
-    username,
-    password: '', // Super admin password is not stored here
-    permissions: defaultPages.map(page => ({ page, view: true, add: true, edit: true, delete: true }))
-});
-
-const createEmptyPermissions = (username: string): UserPermissions => ({
-    username,
-    permissions: defaultPages.map(page => ({ page, view: false, add: false, edit: false, delete: false }))
-});
-
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthenticatedUser | null>(null);
-  const [userPermissions, setUserPermissions] = useState<UserPermissions[]>(() => {
-    const saved = localStorage.getItem(PERMISSIONS_KEY);
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  useEffect(() => {
-    localStorage.setItem(PERMISSIONS_KEY, JSON.stringify(userPermissions));
-  }, [userPermissions]);
-
-  useEffect(() => {
-    let username: string | null = null;
-    try {
-        const savedUser = localStorage.getItem('user');
-        if (savedUser) { username = JSON.parse(savedUser); }
-    } catch (error) {
-        localStorage.removeItem('user');
+export const useAuth = () => {
+    const context = useContext(AuthContext);
+    if (!context) {
+        throw new Error('useAuth must be used within an AuthProvider');
     }
+    return context;
+};
 
-    if (username) {
-      if (username.toLowerCase() === 'shaban') {
-        setUser({ name: username, permissions: superAdminPermissions(username), isSuperAdmin: true });
-      } else {
-        const userPerms = userPermissions.find(p => p.username.toLowerCase() === username!.toLowerCase());
-        setUser({ name: username, permissions: userPerms || createEmptyPermissions(username), isSuperAdmin: false });
-      }
-    } else {
-        setUser(null);
-    }
-  }, [userPermissions]);
+interface AuthProviderProps {
+    children: React.ReactNode;
+}
 
-  const login = (username: string, password?: string): boolean => {
-    if (username.toLowerCase() === 'shaban' && password === '22473') { // Super admin password
-      const authUser: AuthenticatedUser = { name: username, permissions: superAdminPermissions(username), isSuperAdmin: true };
-      localStorage.setItem('user', JSON.stringify(username));
-      setUser(authUser);
-      return true;
-    }
+export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+    // حالة المستخدم الذي قام بتسجيل الدخول
+    const [user, setUser] = useState<UserPermissions | null>(() => {
+        const savedUser = localStorage.getItem('currentUser_v2');
+        return savedUser ? JSON.parse(savedUser) : null;
+    });
 
-    const userToLogin = userPermissions.find(p => p.username.toLowerCase() === username.toLowerCase());
-    if (userToLogin && userToLogin.password === password) {
-      const authUser: AuthenticatedUser = { name: username, permissions: userToLogin, isSuperAdmin: false };
-      localStorage.setItem('user', JSON.stringify(username));
-      setUser(authUser);
-      return true;
-    }
+    // حالة قائمة كل المستخدمين وصلاحياتهم
+    const [userPermissions, setUserPermissions] = useState<UserPermissions[]>(() => {
+        const savedPermissions = localStorage.getItem('userPermissions_v2');
+        if (savedPermissions) {
+            return JSON.parse(savedPermissions);
+        }
+        // قيمة افتراضية عند أول تشغيل للتطبيق
+        return [
+            {
+                username: 'shaban',
+                password: '22473',
+                permissions: [
+                    { page: 'Dashboard', view: true, add: true, edit: true, delete: true },
+                    { page: 'Employees', view: true, add: true, edit: true, delete: true },
+                    { page: 'Attendance', view: true, add: true, edit: true, delete: true },
+                    { page: 'Payroll', view: true, add: true, edit: true, delete: true },
+                    { page: 'Transport', view: true, add: true, edit: true, delete: true },
+                    { page: 'History', view: true, add: true, edit: true, delete: true },
+                    { page: 'Permissions', view: true, add: true, edit: true, delete: true },
+                ]
+            }
+        ];
+    });
     
-    return false;
-  };
+    // حفظ قائمة المستخدمين عند أي تغيير
+    useEffect(() => {
+        localStorage.setItem('userPermissions_v2', JSON.stringify(userPermissions));
+    }, [userPermissions]);
 
-  const logout = () => {
-    localStorage.removeItem('user');
-    setUser(null);
-  };
+    // حفظ المستخدم الحالي عند تسجيل الدخول/الخروج
+    useEffect(() => {
+        if (user) {
+            localStorage.setItem('currentUser_v2', JSON.stringify(user));
+        } else {
+            localStorage.removeItem('currentUser_v2');
+        }
+    }, [user]);
 
-  const can = (action: keyof Omit<Permission, 'page'>, page: string): boolean => {
-    if (!user) return false;
-    if (user.isSuperAdmin) return true;
-    const pagePermission = user.permissions.permissions.find(p => p.page === page);
-    if (!pagePermission) return false;
-    return pagePermission[action] === true;
-  };
+    const login = (username: string, password?: string): boolean => {
+        const foundUser = userPermissions.find(
+            u => u.username.toLowerCase() === username.toLowerCase()
+        );
+        
+        if (foundUser && foundUser.password === password) {
+            setUser(foundUser);
+            return true;
+        }
+        
+        return false;
+    };
 
-  const value = { user, login, logout, can, userPermissions, setUserPermissions };
+    const logout = () => {
+        setUser(null);
+    };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
+    const can = (action: 'view' | 'add' | 'edit' | 'delete', page: string): boolean => {
+        if (!user) {
+            return false;
+        }
 
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-}
+        if (user.username.toLowerCase() === 'shaban') {
+            return true;
+        }
+        
+        if (page === 'Permissions') {
+            return false;
+        }
+
+        const permissionForPage = user.permissions.find(p => p.page === page);
+        if (!permissionForPage) {
+            return false;
+        }
+        
+        // --- تعديل بسيط: التعامل مع صفحة ملخص الحضور AttendanceSummary ---
+        // إذا كان المستخدم لديه صلاحية على Attendance، فلديه صلاحية على ملخصها
+        if (page === 'AttendanceSummary') {
+            const mainAttendancePerms = user.permissions.find(p => p.page === 'Attendance');
+            return mainAttendancePerms ? mainAttendancePerms[action] : false;
+        }
+
+        return permissionForPage[action];
+    };
+
+    return (
+        <AuthContext.Provider value={{ user, userPermissions, setUserPermissions, login, logout, can }}>
+            {children}
+        </AuthContext.Provider>
+    );
+};

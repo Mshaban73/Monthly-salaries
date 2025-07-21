@@ -1,6 +1,6 @@
-// --- START OF FILE src/pages/Login.tsx ---
+// --- START OF FILE src/pages/Login.tsx (النسخة النهائية والمصححة) ---
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import logo from '../assets/logo.png';
@@ -10,19 +10,26 @@ function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, user } = useAuth(); // --- تعديل: جلب 'user' من الـ context
+
+  // --- تعديل: استخدام useEffect لمراقبة تغيير حالة المستخدم ---
+  useEffect(() => {
+    // إذا أصبح 'user' له قيمة (أي تم تسجيل الدخول بنجاح)
+    if (user) {
+      // قم بتوجيه المستخدم إلى الصفحة الرئيسية
+      navigate('/');
+    }
+  }, [user, navigate]);
+
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    setError(''); // إعادة تعيين رسالة الخطأ عند كل محاولة
+    setError('');
 
-    // --- تعديل: استخدام دالة login الجديدة التي تتحقق من كلمة المرور ---
-    // الدالة الآن تعيد true عند النجاح و false عند الفشل
+    // الآن دالة login تقوم فقط بتسجيل الدخول، و useEffect يعتني بالتوجيه
     const loginSuccessful = login(username, password);
     
-    if (loginSuccessful) {
-      navigate('/'); // توجيه المستخدم إلى لوحة التحكم عند النجاح
-    } else {
+    if (!loginSuccessful) {
       setError('اسم المستخدم أو كلمة المرور غير صحيحة');
     }
   };

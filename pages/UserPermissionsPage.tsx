@@ -1,9 +1,8 @@
-// --- START OF FILE src/pages/UserPermissionsPage.tsx ---
+// --- START OF FILE src/pages/UserPermissionsPage.tsx (النسخة النهائية والمصححة) ---
 
 import React, { useState } from 'react';
-import { UserPlus, ShieldCheck, Edit, Trash2, X, Save } from 'lucide-react';
+import { UserPlus, ShieldCheck, Edit, Trash2, X, Save, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-// --- تعديل: استيراد الواجهات من المصدر المركزي الصحيح ---
 import type { UserPermissions, Permission } from '../App';
 
 // الصفحات الافتراضية للنظام
@@ -15,7 +14,7 @@ const createDefaultUser = (username: string, password?: string): UserPermissions
   password,
   permissions: defaultPages.map(page => ({
     page,
-    view: true, // صلاحية العرض مفعلة افتراضياً
+    view: true, 
     add: false,
     edit: false,
     delete: false,
@@ -23,10 +22,26 @@ const createDefaultUser = (username: string, password?: string): UserPermissions
 });
 
 const UserPermissionsPage: React.FC = () => {
-  const { userPermissions, setUserPermissions } = useAuth();
+  // --- تعديل: تغيير اسم المتغير userPermissions إلى allUserPermissions لتجنب التعارض ---
+  const { user: currentUser, userPermissions: allUserPermissions, setUserPermissions } = useAuth();
   
   const [editingUser, setEditingUser] = useState<UserPermissions | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // --- START: إضافة طبقة الحماية الأساسية ---
+  if (currentUser?.username.toLowerCase() !== 'shaban') {
+    return (
+        <div className="p-8 text-center flex flex-col items-center">
+            <AlertTriangle size={64} className="text-yellow-500 mb-4" />
+            <h1 className="text-3xl font-bold text-red-600">غير مصرح لك بالوصول</h1>
+            <p className="mt-4 text-gray-600 max-w-md">
+                هذه الصفحة مخصصة لإدارة صلاحيات المستخدمين وهي محجوزة لمدير النظام (`shaban`) فقط لضمان أمان البيانات.
+            </p>
+        </div>
+    );
+  }
+  // --- END: نهاية طبقة الحماية ---
+
 
   const handleAddNewUser = () => {
     setEditingUser(createDefaultUser('', ''));
@@ -49,7 +64,8 @@ const UserPermissionsPage: React.FC = () => {
   };
 
   const handleSaveUser = (userToSave: UserPermissions) => {
-    const isDuplicate = userPermissions.some(
+    // --- تعديل: استخدام allUserPermissions بدلاً من userPermissions ---
+    const isDuplicate = allUserPermissions.some(
       u => u.username.toLowerCase() === userToSave.username.toLowerCase() && u.username !== editingUser?.username
     );
 
@@ -82,10 +98,10 @@ const UserPermissionsPage: React.FC = () => {
         </button>
       </div>
 
-      {userPermissions.length === 0 && <p className="text-gray-500 text-center py-10 bg-white rounded-lg shadow">لا يوجد مستخدمين مضافين حالياً.</p>}
+      {allUserPermissions.length === 0 && <p className="text-gray-500 text-center py-10 bg-white rounded-lg shadow">لا يوجد مستخدمين مضافين حالياً.</p>}
 
       <div className="space-y-8">
-        {userPermissions.map(user => (
+        {allUserPermissions.map(user => (
           <div key={user.username} className="border rounded-lg p-4 bg-white shadow-md">
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-bold text-xl text-gray-800">المستخدم: <span className="text-indigo-700">{user.username}</span></h2>
