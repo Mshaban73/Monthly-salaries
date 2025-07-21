@@ -1,8 +1,8 @@
-// --- START OF FILE src/pages/EmployeeAttendance.tsx ---
+// --- START OF FILE src/pages/EmployeeAttendance.tsx (النسخة النهائية والمصححة) ---
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Save, ChevronLeft } from 'lucide-react';
+import { Save, ChevronLeft, Zap } from 'lucide-react';
 import type { Employee, AttendanceRecords, PublicHoliday, AttendanceRecordDetail } from '../App';
 import { getPayrollDays, getYearsList, getMonthsList, toYMDString } from '../utils/attendanceCalculator';
 
@@ -91,6 +91,44 @@ function EmployeeAttendance({ employees, attendanceRecords, setAttendanceRecords
         setAttendanceRecords(newAttendanceRecords);
         alert('تم حفظ سجل الحضور بنجاح!');
     };
+    
+    // --- START: تم تصحيح هذه الدالة بالكامل ---
+    const handleAutoFill = () => {
+        if (!employee) return;
+
+        if (window.confirm(`هل أنت متأكد؟ سيتم تعبئة ساعات العمل الافتراضية لجميع أيام العمل، مع مراعاة يوم الخميس. سيتم الكتابة فوق أي بيانات موجودة.`)) {
+            const newDailyData = { ...dailyData };
+
+            payrollDays.forEach(day => {
+                const dateStr = toYMDString(day);
+                const dayOfWeekJS = day.getUTCDay();
+                const dayNameArabic = Object.keys(dayNameToIndex).find(key => dayNameToIndex[key] === dayOfWeekJS);
+                const isRestDay = employee.restDays.includes(dayNameArabic || '');
+                const isHoliday = publicHolidays.some(h => h.date === dateStr);
+
+                // قم بالتعبئة فقط إذا كان يوم عمل
+                if (!isRestDay && !isHoliday) {
+                    let hoursToFill: string;
+
+                    // --- تعديل: إضافة منطق خاص بيوم الخميس ---
+                    if (dayNameArabic === 'الخميس') {
+                        hoursToFill = employee.isHeadOffice ? '3' : '4';
+                    } else {
+                        hoursToFill = employee.hoursPerDay.toString();
+                    }
+
+                    newDailyData[dateStr] = {
+                        hours: hoursToFill,
+                        location: dailyData[dateStr]?.location || employee.workLocation || '',
+                    };
+                }
+            });
+
+            setDailyData(newDailyData);
+            alert('تمت التعبئة التلقائية بنجاح!');
+        }
+    };
+    // --- END: نهاية الدالة المصححة ---
 
     if (!employee) { return ( <div className="text-center py-10 text-red-500"><h2 className="text-2xl font-bold">خطأ</h2><p>لم يتم العثور على الموظف.</p><Link to="/attendance" className="text-blue-600 hover:underline mt-4 inline-block">العودة لصفحة الملخص</Link></div> ); }
     
@@ -100,16 +138,23 @@ function EmployeeAttendance({ employees, attendanceRecords, setAttendanceRecords
                 <div>
                    <Link to="/attendance" className="flex items-center text-sm text-gray-600 hover:text-blue-600 mb-2"><ChevronLeft size={18} />العودة لصفحة الملخص</Link>
                    <h2 className="text-2xl font-semibold text-gray-800">سجل حضور الموظف: <span className="text-blue-700">{employee.name}</span></h2>
-                   <p className="text-sm text-gray-500">الموقع الافتراضي: {employee.workLocation}</p>
+                   <p className="text-sm text-gray-500">الموقع الافتراضي: {employee.workLocation} | ساعات العمل الافتراضية: {employee.hoursPerDay}</p>
                 </div>
                 <button onClick={handleSave} className="flex items-center bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 shadow"><Save size={20} className="mr-2" />حفظ التغييرات</button>
             </div>
             
             <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-                 <h3 className="text-lg font-semibold text-gray-700 mb-4">اختر فترة العرض</h3>
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 <h3 className="text-lg font-semibold text-gray-700 mb-4">اختر فترة العرض وقم بالإجراءات</h3>
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                      <select value={selectedPeriod.month} onChange={e => setSelectedPeriod({...selectedPeriod, month: Number(e.target.value)})} className="w-full bg-gray-50 px-3 py-2 border rounded-md">{months.map(m => <option key={m.value} value={m.value}>{m.name}</option>)}</select>
                      <select value={selectedPeriod.year} onChange={e => setSelectedPeriod({...selectedPeriod, year: Number(e.target.value)})} className="w-full bg-gray-50 px-3 py-2 border rounded-md">{years.map(y => <option key={y} value={y}>{y}</option>)}</select>
+                     <button
+                        onClick={handleAutoFill}
+                        className="flex items-center justify-center bg-blue-100 text-blue-800 px-4 py-2 rounded-lg hover:bg-blue-200 shadow-sm transition-colors"
+                     >
+                        <Zap size={18} className="ml-2" />
+                        تعبئة تلقائية لأيام العمل
+                     </button>
                  </div>
             </div>
 

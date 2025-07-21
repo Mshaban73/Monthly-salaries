@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import * as XLSX from 'xlsx'; // --- خطوة 1: استيراد مكتبة Excel ---
 import type { Employee, AttendanceRecords, PublicHoliday } from '../App';
 import { 
     calculateAttendanceSummary, 
@@ -11,8 +12,8 @@ import {
     calculateLocationSummary,
     LocationSummary 
 } from '../utils/attendanceCalculator';
-import { Clock, MapPin, Search } from 'lucide-react';
-import { useAuth } from '../context/AuthContext'; // --- تعديل: استيراد useAuth ---
+import { Clock, MapPin, Search, FileDown } from 'lucide-react'; // --- خطوة 2: إضافة أيقونة التصدير ---
+import { useAuth } from '../context/AuthContext';
 
 interface AttendanceSummaryProps {
     employees: Employee[];
@@ -30,7 +31,7 @@ const LocationDistribution = ({ summary }: { summary: LocationSummary }) => { co
 function AttendanceSummary({ employees, attendanceRecords, publicHolidays }: AttendanceSummaryProps) {
     const [selectedPeriod, setSelectedPeriod] = useState({ month: new Date().getMonth() + 1, year: new Date().getFullYear(), });
     const [searchTerm, setSearchTerm] = useState('');
-    const { can } = useAuth(); // --- تعديل: الوصول إلى دالة التحقق من الصلاحيات ---
+    const { can } = useAuth();
 
     const payrollDays = useMemo(() => getPayrollDays(selectedPeriod.year, selectedPeriod.month), [selectedPeriod]);
 
@@ -46,9 +47,60 @@ function AttendanceSummary({ employees, attendanceRecords, publicHolidays }: Att
         });
     }, [employees, attendanceRecords, publicHolidays, payrollDays, searchTerm]);
 
+    // --- خطوة 3: إنشاء دالة التصدير ---
+    const handleExport = () => {
+        if (employeesSummary.length === 0) {
+            alert("لا توجد بيانات لتصديرها.");
+            return;
+        }
+
+        const dataForExport = employeesSummary.map(emp => ({
+            'اسم الموظف': emp.name,
+            'أيام الحضور': emp.summary.actualAttendanceDays,
+            'توزيع الحضور بالموقع': Object.entries(emp.locationSummary).map(([loc, days]) => `${loc}: ${days} يوم`).join('\n'),
+            'ساعات إضافي عمل (فعلية)': emp.summary.weekdayOvertime.rawHours.toFixed(1),
+            'قيمة إضافي عمل (محتسبة)': emp.summary.weekdayOvertime.calculatedValue.toFixed(1),
+            'ساعات إضافي خميس (فعلية)': emp.summary.thursdayOvertime.rawHours.toFixed(1),
+            'قيمة إضافي خميس (محتسبة)': emp.summary.thursdayOvertime.calculatedValue.toFixed(1),
+            'ساعات إضافي راحة (فعلية)': emp.summary.restDayOvertime.rawHours.toFixed(1),
+            'قيمة إضافي راحة (محتسبة)': emp.summary.restDayOvertime.calculatedValue.toFixed(1),
+            'ساعات إضافي عطلة (فعلية)': emp.summary.holidayOvertime.rawHours.toFixed(1),
+            'قيمة إضافي عطلة (محتسبة)': emp.summary.holidayOvertime.calculatedValue.toFixed(1),
+            'إجمالي الساعات المحتسبة': emp.summary.totalOvertimeValue.toFixed(1),
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(dataForExport);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, `ملخص حضور ${selectedPeriod.month}-${selectedPeriod.year}`);
+        
+        // تعديل عرض الأعمدة ليكون مناسباً
+        ws['!cols'] = [
+            { wch: 25 }, // اسم الموظف
+            { wch: 12 }, // أيام الحضور
+            { wch: 30 }, // توزيع الحضور
+            { wch: 20 }, { wch: 20 }, // إضافي عمل
+            { wch: 20 }, { wch: 20 }, // إضافي خميس
+            { wch: 20 }, { wch: 20 }, // إضافي راحة
+            { wch: 20 }, { wch: 20 }, // إضافي عطلة
+            { wch: 20 }, // الإجمالي
+        ];
+
+        XLSX.writeFile(wb, `AttendanceSummary_${selectedPeriod.year}_${selectedPeriod.month}.xlsx`);
+    };
+
     return (
         <div className="p-4 md:p-6">
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-6">ملخص حضور الموظفين</h2>
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl md:text-3xl font-bold text-gray-800">ملخص حضور الموظفين</h2>
+                {/* --- خطوة 4: إضافة زر التصدير --- */}
+                <button 
+                    onClick={handleExport}
+                    className="flex items-center bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 shadow-sm transition-colors"
+                >
+                    <FileDown size={20} className="ml-2" />
+                    تصدير Excel
+                </button>
+            </div>
             
             <div className="bg-white p-4 md:p-6 rounded-lg shadow-md mb-6">
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -89,27 +141,34 @@ function AttendanceSummary({ employees, attendanceRecords, publicHolidays }: Att
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                        {employeesSummary.map(emp => (
-                            <tr key={emp.id} className="hover:bg-gray-50 transition-colors duration-150">
-                                <td className="px-4 py-4 whitespace-nowrap">
-                                    {/* --- تعديل: التحقق من صلاحية "edit" قبل عرض الرابط --- */}
-                                    {can('edit', 'Attendance') ? (
-                                        <Link to={`/attendance/${emp.id}`} className="font-medium text-blue-600 hover:text-blue-800 hover:underline">
-                                            {emp.name}
-                                        </Link>
-                                    ) : (
-                                        <span className="font-medium text-gray-800">{emp.name}</span>
-                                    )}
+                        {employeesSummary.length === 0 ? (
+                           <tr>
+                                <td colSpan={8} className="text-center py-10 text-gray-500">
+                                    {searchTerm ? 'لم يتم العثور على موظفين بهذا الاسم.' : 'لا توجد بيانات حضور لهذه الفترة.'}
                                 </td>
-                                <td className="px-4 py-4 whitespace-nowrap text-center text-gray-800 font-semibold">{emp.summary.actualAttendanceDays}</td>
-                                <td className="px-4 py-4 whitespace-nowrap"><LocationDistribution summary={emp.locationSummary} /></td>
-                                <td className="px-4 py-4 whitespace-nowrap text-center">{formatOvertimeCell(emp.summary.weekdayOvertime)}</td>
-                                <td className="px-4 py-4 whitespace-nowrap text-center">{formatOvertimeCell(emp.summary.thursdayOvertime)}</td>
-                                <td className="px-4 py-4 whitespace-nowrap text-center text-green-700">{formatOvertimeCell(emp.summary.restDayOvertime)}</td>
-                                <td className="px-4 py-4 whitespace-nowrap text-center text-purple-700">{formatOvertimeCell(emp.summary.holidayOvertime)}</td>
-                                <td className="px-4 py-4 whitespace-nowrap text-center text-blue-800 bg-blue-50"><div className="flex items-center justify-center font-bold text-lg"><Clock size={16} className="mr-2" />{emp.summary.totalOvertimeValue.toFixed(1)}</div></td>
-                            </tr>
-                        ))}
+                           </tr>
+                        ) : (
+                            employeesSummary.map(emp => (
+                                <tr key={emp.id} className="hover:bg-gray-50 transition-colors duration-150">
+                                    <td className="px-4 py-4 whitespace-nowrap">
+                                        {can('edit', 'Attendance') ? (
+                                            <Link to={`/attendance/${emp.id}`} className="font-medium text-blue-600 hover:text-blue-800 hover:underline">
+                                                {emp.name}
+                                            </Link>
+                                        ) : (
+                                            <span className="font-medium text-gray-800">{emp.name}</span>
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-4 whitespace-nowrap text-center text-gray-800 font-semibold">{emp.summary.actualAttendanceDays}</td>
+                                    <td className="px-4 py-4 whitespace-nowrap"><LocationDistribution summary={emp.locationSummary} /></td>
+                                    <td className="px-4 py-4 whitespace-nowrap text-center">{formatOvertimeCell(emp.summary.weekdayOvertime)}</td>
+                                    <td className="px-4 py-4 whitespace-nowrap text-center">{formatOvertimeCell(emp.summary.thursdayOvertime)}</td>
+                                    <td className="px-4 py-4 whitespace-nowrap text-center text-green-700">{formatOvertimeCell(emp.summary.restDayOvertime)}</td>
+                                    <td className="px-4 py-4 whitespace-nowrap text-center text-purple-700">{formatOvertimeCell(emp.summary.holidayOvertime)}</td>
+                                    <td className="px-4 py-4 whitespace-nowrap text-center text-blue-800 bg-blue-50"><div className="flex items-center justify-center font-bold text-lg"><Clock size={16} className="mr-2" />{emp.summary.totalOvertimeValue.toFixed(1)}</div></td>
+                                </tr>
+                            ))
+                        )}
                     </tbody>
                 </table>
             </div>
