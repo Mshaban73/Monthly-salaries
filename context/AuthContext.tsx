@@ -1,15 +1,15 @@
-// --- START OF FILE src/context/AuthContext.tsx (النسخة النهائية والجديدة) ---
+// --- START OF FILE src/context/AuthContext.tsx (النسخة النهائية والنظيفة) ---
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import type { UserPermissions } from '../App';
+import { supabase } from '../supabaseClient';
+import type { Session, User } from '@supabase/supabase-js';
 
 interface AuthContextType {
-    user: UserPermissions | null;
-    userPermissions: UserPermissions[];
-    setUserPermissions: React.Dispatch<React.SetStateAction<UserPermissions[]>>;
-    login: (username: string, password?: string) => boolean;
-    logout: () => void;
-    can: (action: 'view' | 'add' | 'edit' | 'delete', page: string) => boolean;
+    session: Session | null;
+    user: User | null;
+    login: (email, password) => Promise<void>;
+    logout: () => Promise<void>;
+    // سنضيف دالة can لاحقاً عندما نصل إلى الصلاحيات
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -27,98 +27,59 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-    // حالة المستخدم الذي قام بتسجيل الدخول
-    const [user, setUser] = useState<UserPermissions | null>(() => {
-        const savedUser = localStorage.getItem('currentUser_v2');
-        return savedUser ? JSON.parse(savedUser) : null;
-    });
+    const [session, setSession] = useState<Session | null>(null);
+    const [user, setUser] = useState<User | null>(null);
+    const [loading, setLoading] = useState(true);
 
-    // حالة قائمة كل المستخدمين وصلاحياتهم
-    const [userPermissions, setUserPermissions] = useState<UserPermissions[]>(() => {
-        const savedPermissions = localStorage.getItem('userPermissions_v2');
-        if (savedPermissions) {
-            return JSON.parse(savedPermissions);
-        }
-        // قيمة افتراضية عند أول تشغيل للتطبيق
-        return [
-            {
-                username: 'shaban',
-                password: '22473',
-                permissions: [
-                    { page: 'Dashboard', view: true, add: true, edit: true, delete: true },
-                    { page: 'Employees', view: true, add: true, edit: true, delete: true },
-                    { page: 'Attendance', view: true, add: true, edit: true, delete: true },
-                    { page: 'Payroll', view: true, add: true, edit: true, delete: true },
-                    { page: 'Transport', view: true, add: true, edit: true, delete: true },
-                    { page: 'History', view: true, add: true, edit: true, delete: true },
-                    { page: 'Permissions', view: true, add: true, edit: true, delete: true },
-                ]
-            }
-        ];
-    });
+    useEffect(() => {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          setSession(session);
+          setUser(session?.user ?? null);
+          setLoading(false);
+        });
     
-    // حفظ قائمة المستخدمين عند أي تغيير
-    useEffect(() => {
-        localStorage.setItem('userPermissions_v2', JSON.stringify(userPermissions));
-    }, [userPermissions]);
-
-    // حفظ المستخدم الحالي عند تسجيل الدخول/الخروج
-    useEffect(() => {
-        if (user) {
-            localStorage.setItem('currentUser_v2', JSON.stringify(user));
-        } else {
-            localStorage.removeItem('currentUser_v2');
-        }
-    }, [user]);
-
-    const login = (username: string, password?: string): boolean => {
-        const foundUser = userPermissions.find(
-            u => u.username.toLowerCase() === username.toLowerCase()
+        const { data: listener } = supabase.auth.onAuthStateChange(
+          async (_event, session) => {
+            setSession(session);
+            setUser(session?.user ?? null);
+            setLoading(false);
+          }
         );
-        
-        if (foundUser && foundUser.password === password) {
-            setUser(foundUser);
-            return true;
+    
+        return () => {
+          listener?.subscription.unsubscribe();
+        };
+      }, []);
+
+    const login = async (email, password) => {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+    
+        if (error) {
+            throw error;
         }
-        
-        return false;
+    };
+    
+    const logout = async () => {
+        const { error } = await supabase.auth.signOut();
+
+        if (error) {
+            throw error;
+        }
     };
 
-    const logout = () => {
-        setUser(null);
-    };
+    // ▼▼▼ هذا هو التغيير الذي تم تنفيذه: تم حذف دالة can القديمة من هنا ▼▼▼
+    // ▲▲▲ نهاية التغيير ▲▲▲
 
-    const can = (action: 'view' | 'add' | 'edit' | 'delete', page: string): boolean => {
-        if (!user) {
-            return false;
-        }
-
-        if (user.username.toLowerCase() === 'shaban') {
-            return true;
-        }
-        
-        if (page === 'Permissions') {
-            return false;
-        }
-
-        const permissionForPage = user.permissions.find(p => p.page === page);
-        if (!permissionForPage) {
-            return false;
-        }
-        
-        // --- تعديل بسيط: التعامل مع صفحة ملخص الحضور AttendanceSummary ---
-        // إذا كان المستخدم لديه صلاحية على Attendance، فلديه صلاحية على ملخصها
-        if (page === 'AttendanceSummary') {
-            const mainAttendancePerms = user.permissions.find(p => p.page === 'Attendance');
-            return mainAttendancePerms ? mainAttendancePerms[action] : false;
-        }
-
-        return permissionForPage[action];
+    const value = {
+        session,
+        user,
+        login,
+        logout,
     };
 
     return (
-        <AuthContext.Provider value={{ user, userPermissions, setUserPermissions, login, logout, can }}>
-            {children}
-        </AuthContext.Provider>
+        <AuthContext.Provider value={value}>
+            {!loading && children}
+        </Auth-Context.Provider>
     );
 };

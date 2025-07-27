@@ -1,108 +1,67 @@
-import { useState, useEffect } from 'react';
-import { supabase } from './supabaseClient';
+// --- START OF FILE App.jsx (النهائي بالكامل مع كل المسارات) ---
+
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useAuth } from './context/AuthContext.tsx';
+
+import AppLayout from './components/AppLayout.jsx';
+import Login from './components/Login.jsx';
+import Employees from './pages/Employees.tsx';
+import Dashboard from './pages/Dashboard.tsx';
+import AttendanceSummary from './pages/AttendanceSummary.tsx';
+import EmployeeAttendance from './pages/EmployeeAttendance.tsx';
+import Payroll from './pages/Payroll.tsx';
+import TransportCosts from './pages/TransportCosts.tsx';
+import History from './pages/History.tsx';
+import ReportView from './pages/ReportView.tsx';
+import UserPermissionsPage from './pages/UserPermissionsPage.tsx'; // <-- تم الاستيراد
+
+// الصفحات المتبقية
+const PageNotFound = () => <h1>Page Not Found</h1>;
+
+function ProtectedRoute({ children }) {
+  const { user } = useAuth();
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+}
 
 function App() {
-  const [data, setData] = useState([]);
-  const [employees, setEmployees] = useState('');
-  const [search, setSearch] = useState('');
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  // تم تعديل هذه الدالة
-  const fetchData = async () => {
-    // 1. تم تغيير 'id' إلى 'user_id'
-    let query = supabase.from('app_data').select('employees, user_id');
-    if (search) {
-      query = query.ilike('employees', `%${search}%`);
-    }
-    const { data: appData, error } = await query;
-    if (error) console.log('Error fetching data:', error);
-    else setData(appData);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    const { error } = await supabase.from('app_data').insert({ employees });
-    if (error) console.log('Error inserting data:', error);
-    else {
-      setEmployees('');
-      fetchData();
-    }
-  };
-
-  // تم تعديل هذه الدالة
-  const handleUpdate = async (index) => {
-    // 2. تم تغيير 'id' إلى 'user_id' هنا أيضاً
-    const newEmployees = prompt('Enter new employees data (JSON)', JSON.stringify(data[index].employees));
-    if (newEmployees) {
-      const { error } = await supabase
-        .from('app_data')
-        .update({ employees: JSON.parse(newEmployees) })
-        .eq('user_id', data[index].user_id); // <-- التغيير هنا
-      if (error) console.log('Error updating data:', error);
-      else fetchData();
-    }
-  };
-
-  // تم تعديل هذه الدالة
-  const handleDelete = async (userId) => { // تم تغيير اسم المتغير إلى userId للوضوح
-    // 3. تم تغيير 'id' إلى 'user_id' هنا
-    if (confirm('Are you sure you want to delete this entry?')) {
-      const { error } = await supabase.from('app_data').delete().eq('user_id', userId); // <-- التغيير هنا
-      if (error) console.log('Error deleting data:', error);
-      else fetchData();
-    }
-  };
+  const { user } = useAuth();
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-3xl font-bold mb-4 text-center">Monthly Salaries App</h1>
-      <p className="mb-4 text-center">Connected to Supabase!</p>
-      <div className="mb-4">
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            fetchData();
-          }}
-          placeholder="Search employees..."
-          className="border p-2 mr-2 w-full md:w-1/2"
+    <BrowserRouter>
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <AppLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Navigate replace to="dashboard" />} />
+          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="employees" element={<Employees />} />
+          <Route path="attendance" element={<AttendanceSummary />} />
+          <Route path="attendance/:employeeId" element={<EmployeeAttendance />} />
+          <Route path="payroll" element={<Payroll />} />
+          <Route path="transport" element={<TransportCosts />} />
+          <Route path="history" element={<History />} />
+          <Route path="history/:year/:month" element={<ReportView />} />
+          
+          {/* ▼▼▼ هذا هو المسار الذي تم تعديله ▼▼▼ */}
+          <Route path="permissions" element={<UserPermissionsPage />} />
+          {/* ▲▲▲ نهاية التعديل ▲▲▲ */}
+        </Route>
+
+        <Route 
+          path="login" 
+          element={user ? <Navigate to="/" replace /> : <Login />} 
         />
-      </div>
-      <form onSubmit={handleSubmit} className="mb-4">
-        <input
-          type="text"
-          value={employees}
-          onChange={(e) => setEmployees(e.target.value)}
-          placeholder="Enter employees data (JSON)"
-          className="border p-2 mr-2 w-full md:w-1/2"
-        />
-        <button type="submit" className="bg-blue-500 text-white p-2 rounded">Add Data</button>
-      </form>
-      <ul className="list-disc pl-5">
-        {/* 4. تم تعديل الـ key و استدعاء handleDelete */}
-        {data.map((item, index) => (
-          <li key={item.user_id} className="mb-2 flex items-center justify-between"> {/* <-- التغيير هنا */}
-            {typeof item.employees === 'string' ? item.employees : JSON.stringify(item.employees, null, 2)}
-            <button
-              onClick={() => handleUpdate(index)}
-              className="ml-4 bg-green-500 text-white p-1 rounded"
-            >
-              Update
-            </button>
-            <button
-              onClick={() => handleDelete(item.user_id)} // <-- التغيير هنا
-              className="ml-2 bg-red-500 text-white p-1 rounded"
-            >
-              Delete
-            </button>
-          </li>
-        ))}
-      </ul>
-    </div>
+        <Route path="*" element={<PageNotFound />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 
