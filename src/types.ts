@@ -18,6 +18,7 @@ export interface Employee {
   expatriation_allowance?: Allowance;
   meal_allowance?: Allowance;
   housing_allowance?: Allowance;
+  isEligible?: boolean; // إضافة خاصية اختيارية للاستحقاق
 }
 
 // 2. نوع البدلات
@@ -94,6 +95,7 @@ export interface PayrollReportItem {
     generalBonus: number;
     loanInstallment: number;
     netSalary: number;
+    isEligible: boolean; // إضافة خاصية الاستحقاق
 }
 
 // 9. نوع سائقي النقل
