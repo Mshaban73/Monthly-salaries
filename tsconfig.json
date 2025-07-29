@@ -13,10 +13,11 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
+    "types": ["vite/client"], /* <-- هذا هو السطر الذي أضفته */
 
     /* Linting */
     "strict": true,
-    "noUnusedLocals": false, // <-- تعديل: تغيير هذه القيمة إلى false
+    "noUnusedLocals": false,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },

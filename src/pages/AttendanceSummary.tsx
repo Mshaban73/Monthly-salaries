@@ -1,4 +1,4 @@
-// --- START OF FILE src/pages/AttendanceSummary.tsx (كامل ومع الأنواع الصحيحة) ---
+// --- START OF FILE src/pages/AttendanceSummary.tsx (كامل ومع التعديلات الصحيحة) ---
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
@@ -8,7 +8,8 @@ import { useAuth } from '../context/AuthContext.tsx';
 import { supabase } from '../supabaseClient.js';
 import { getPayrollDays, getYearsList, getMonthsList, toYMDString } from '../utils/attendanceCalculator.ts';
 import { calculateAttendanceSummary, calculateLocationSummary } from '../utils/fullAttendanceCalculator.ts';
-import type { Employee, PublicHoliday, AttendanceRecord } from '../types.ts';
+// استيراد الأنواع الصحيحة
+import type { Employee, PublicHoliday, AttendanceRecord, AttendanceRecords } from '../types.ts';
 
 const months = getMonthsList();
 const years = getYearsList();
@@ -23,9 +24,9 @@ const getInitialPeriod = () => {
     return { month: today.getMonth() + 1, year: today.getFullYear() };
 };
 
-const LocationDistribution = ({ summary }: { summary: { [key: string]: number } }) => { 
-    const entries = Object.entries(summary); 
-    if (entries.length === 0) { return <span className="text-gray-400">-</span>; } 
+const LocationDistribution = ({ summary }: { summary: { [key: string]: number } }) => {
+    const entries = Object.entries(summary);
+    if (entries.length === 0) { return <span className="text-gray-400">-</span>; }
     return (
         <div className="flex flex-col items-start text-xs space-y-1">
             {entries.map(([location, days]: [string, number]) => (
@@ -36,28 +37,29 @@ const LocationDistribution = ({ summary }: { summary: { [key: string]: number } 
                 </div>
             ))}
         </div>
-    ); 
+    );
 };
 
-const formatOvertimeCell = (overtime: { rawHours: number, calculatedValue: number }) => { 
-    if (overtime.rawHours === 0) { return <span className="text-gray-400">-</span>; } 
+const formatOvertimeCell = (overtime: { rawHours: number, calculatedValue: number }) => {
+    if (overtime.rawHours === 0) { return <span className="text-gray-400">-</span>; }
     return (
         <div className="flex flex-col items-center">
             <span className="font-bold text-lg">{overtime.calculatedValue.toFixed(2)}</span>
             <span className="text-xs text-gray-500">({overtime.rawHours.toFixed(1)} س)</span>
         </div>
-    ); 
+    );
 };
 
 export default function AttendanceSummary() {
     const { can } = useAuth();
     const [employees, setEmployees] = useState<Employee[]>([]);
-    const [attendanceRecords, setAttendanceRecords] = useState<{ [date: string]: { [empId: number]: { hours: number, location: string } } }>({});
+    // --- تعديل: استخدام النوع الصحيح AttendanceRecords من ملف الأنواع ---
+    const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecords>({});
     const [publicHolidays, setPublicHolidays] = useState<PublicHoliday[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedPeriod, setSelectedPeriod] = useState(getInitialPeriod);
     const [searchTerm, setSearchTerm] = useState('');
-    
+
     const payrollDays = useMemo(() => getPayrollDays(selectedPeriod.year, selectedPeriod.month), [selectedPeriod]);
 
     useEffect(() => {
@@ -71,15 +73,35 @@ export default function AttendanceSummary() {
                 supabase.from('attendance').select('*').gte('date', startDate).lte('date', endDate),
                 supabase.from('public_holidays').select('*').gte('date', startDate).lte('date', endDate)
             ]);
-            if (employeesRes.error || attendanceRes.error || holidaysRes.error) { console.error("Error fetching data:", employeesRes.error || attendanceRes.error || holidaysRes.error); alert('فشل في جلب البيانات.'); } 
-            else {
+            if (employeesRes.error || attendanceRes.error || holidaysRes.error) {
+                console.error("Error fetching data:", employeesRes.error || attendanceRes.error || holidaysRes.error);
+                alert('فشل في جلب البيانات.');
+            } else {
                 setEmployees(employeesRes.data || []);
-                const recordsByDate = (attendanceRes.data || []).reduce((acc, record: AttendanceRecord) => {
-                  const date = record.date;
-                  if (!acc[date]) acc[date] = {};
-                  acc[date][record.employee_id] = { hours: record.hours, location: record.location };
-                  return acc;
-                }, {} as { [date: string]: { [empId: number]: { hours: number, location: string } } });
+
+                // --- بداية التعديل الرئيسي لحل مشكلة عدم تطابق الأنواع ---
+                const recordsByDate = (attendanceRes.data || []).reduce((acc: AttendanceRecords, record: AttendanceRecord) => {
+                    const { date, employee_id, hours, location } = record;
+
+                    if (!acc[date]) {
+                        acc[date] = {};
+                    }
+
+                    if (!acc[date][employee_id]) {
+                        // إذا كان هذا أول سجل للموظف في هذا اليوم، قم بإنشاء الكائن
+                        acc[date][employee_id] = { hours: hours, locations: [location] };
+                    } else {
+                        // إذا كان للموظف سجل موجود بالفعل في نفس اليوم (هذا غير متوقع غالباً ولكن للسلامة)
+                        // أضف الساعات إلى الساعات الحالية والموقع إلى مصفوفة المواقع
+                        acc[date][employee_id].hours += hours;
+                        if (!acc[date][employee_id].locations.includes(location)) {
+                            acc[date][employee_id].locations.push(location);
+                        }
+                    }
+                    return acc;
+                }, {}); // تم تحديد النوع في بداية reduce
+                // --- نهاية التعديل الرئيسي ---
+
                 setAttendanceRecords(recordsByDate);
                 setPublicHolidays(holidaysRes.data || []);
             }
@@ -92,6 +114,7 @@ export default function AttendanceSummary() {
         const filtered = employees.filter((emp: Employee) => emp.name.toLowerCase().includes(searchTerm.toLowerCase()));
         return filtered.map((employee: Employee) => ({
             ...employee,
+            // الآن البيانات التي نمررها مطابقة للنوع الذي تتوقعه الدوال
             summary: calculateAttendanceSummary(employee, attendanceRecords, publicHolidays, payrollDays),
             locationSummary: calculateLocationSummary(employee, attendanceRecords, payrollDays)
         }));
@@ -133,7 +156,7 @@ export default function AttendanceSummary() {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                         {employeesSummary.length > 0 ? (
-                            employeesSummary.map((emp: any) => (
+                            employeesSummary.map((emp: any) => ( // Kept as 'any' for simplicity, can be improved with a specific type
                                 <tr key={emp.id} className="hover:bg-gray-50">
                                     <td className="px-4 py-4 whitespace-nowrap"><Link to={`/attendance/${emp.id}`} className="font-medium text-blue-600 hover:text-blue-800 hover:underline">{emp.name}</Link></td>
                                     <td className="px-4 py-4 text-center font-semibold">{emp.summary.actualAttendanceDays}</td>

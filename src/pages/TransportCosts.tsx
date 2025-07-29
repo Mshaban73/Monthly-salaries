@@ -1,4 +1,4 @@
-// --- START OF FILE src/pages/TransportCosts.tsx (النهائي مع تعديل بيانات التقرير) ---
+// --- START OF FILE src/pages/TransportCosts.tsx (النهائي والمصحح بالكامل) ---
 
 import React, { useEffect, useState, useMemo } from "react";
 import * as XLSX from "xlsx";
@@ -7,7 +7,10 @@ import { useAuth } from '../context/AuthContext.tsx';
 import { supabase } from '../supabaseClient.js';
 import { getPayrollDays, getYearsList, getMonthsList, toYMDString } from '../utils/attendanceCalculator.ts';
 import FinancialsModal from '../components/FinancialsModal.tsx';
-import { Edit, Trash2, Save, DollarSign, PlusCircle, Loader, FileDown, Search } from 'lucide-react';
+import { Edit, Trash2, Save, DollarSign, Loader, FileDown, Search } from 'lucide-react';
+// --- بداية التعديل 1: استيراد النوع الصحيح ---
+import type { Driver, PublicHoliday, FinancialItem } from '../types.ts';
+// --- نهاية التعديل 1 ---
 
 const months = getMonthsList();
 const years = getYearsList();
@@ -20,18 +23,26 @@ const getInitialPeriod = () => {
     return { month: today.getMonth() + 1, year: today.getFullYear() };
 };
 
+type TransportAttendanceState = {
+  [driverId: number]: {
+    [date: string]: number;
+  };
+};
+
 export default function TransportCosts() {
   const { can } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [drivers, setDrivers] = useState<any[]>([]);
-  const [attendance, setAttendance] = useState<any>({});
-  const [financials, setFinancials] = useState<any[]>([]);
-  const [publicHolidays, setPublicHolidays] = useState<any[]>([]);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [attendance, setAttendance] = useState<TransportAttendanceState>({});
+  // --- بداية التعديل 2: استخدام النوع الصحيح للحالة ---
+  const [financials, setFinancials] = useState<FinancialItem[]>([]);
+  // --- نهاية التعديل 2 ---
+  const [publicHolidays, setPublicHolidays] = useState<PublicHoliday[]>([]);
   
   const [selectedPeriod, setSelectedPeriod] = useState(getInitialPeriod);
-  const [editingDriver, setEditingDriver] = useState<any | null>(null);
-  const [managingDriver, setManagingDriver] = useState<any | null>(null);
+  const [editingDriver, setEditingDriver] = useState<Driver | null>(null);
+  const [managingDriver, setManagingDriver] = useState<Driver | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showInactive, setShowInactive] = useState(false);
   const [isDriverActive, setIsDriverActive] = useState(true);
@@ -56,7 +67,7 @@ export default function TransportCosts() {
     ]);
 
     setDrivers(driversRes.data || []);
-    const attByDriver = (attRes.data || []).reduce((acc: any, rec: any) => {
+    const attByDriver = (attRes.data || []).reduce((acc: TransportAttendanceState, rec: { driver_id: number, date: string, trips: number }) => {
       if (!acc[rec.driver_id]) acc[rec.driver_id] = {};
       acc[rec.driver_id][rec.date] = rec.trips;
       return acc;
@@ -67,7 +78,7 @@ export default function TransportCosts() {
     setLoading(false);
   };
 
-  const handleEditClick = (driver: any) => {
+  const handleEditClick = (driver: Driver) => {
     setEditingDriver(driver);
     setIsDriverActive(driver.is_active);
   };
@@ -84,7 +95,7 @@ export default function TransportCosts() {
         name: (form.elements.namedItem('name') as HTMLInputElement).value, 
         work_location: (form.elements.namedItem('workLocation') as HTMLInputElement).value, 
         payment_source: (form.elements.namedItem('paymentSource') as HTMLInputElement).value, 
-        day_cost: Number((form.elements.namedItem('dayCost') as HTMLInputElement).value),
+        daily_rate: Number((form.elements.namedItem('dayCost') as HTMLInputElement).value), // <-- تصحيح اسم الحقل
         is_active: isDriverActive
     };
     if (editingDriver) {
@@ -114,15 +125,18 @@ export default function TransportCosts() {
     if (error) {
       console.error("Failed to save attendance:", error);
     } else {
-      setAttendance(prev => ({ ...prev, [driverId]: { ...(prev[driverId] || {}), [date]: trips } }));
+      setAttendance((prev: TransportAttendanceState) => ({ 
+        ...prev, 
+        [driverId]: { ...(prev[driverId] || {}), [date]: trips } 
+      }));
     }
   };
 
   const getDriverTotal = (driverId: number) => {
     const records = attendance[driverId] || {};
-    const totalDays = Object.values(records).reduce((acc: number, val: any) => acc + Number(val || 0), 0);
+    const totalDays = Object.values(records).reduce((acc: number, val: number) => acc + Number(val || 0), 0);
     const driver = drivers.find((d) => d.id === driverId);
-    const baseCost = totalDays * (driver?.day_cost || 0);
+    const baseCost = totalDays * (driver?.daily_rate || 0);
     const driverFinancials = financials.filter(f => f.driver_id === driverId);
     const extrasTotal = driverFinancials.filter(f => f.type === 'extra').reduce((sum, item) => sum + item.amount, 0);
     const deductionsTotal = driverFinancials.filter(f => f.type === 'deduction').reduce((sum, item) => sum + item.amount, 0);
@@ -137,7 +151,7 @@ export default function TransportCosts() {
               driver_name: driver.name,
               work_location: driver.work_location,
               payment_source: driver.payment_source,
-              day_cost: driver.day_cost,
+              day_cost: driver.daily_rate,
               ...totals
           };
       });
@@ -151,7 +165,7 @@ export default function TransportCosts() {
   const handleExportExcel = () => {
       const exportData = filteredDrivers.map((driver) => {
           const { totalDays, totalCost, extrasTotal, deductionsTotal, baseCost } = getDriverTotal(driver.id);
-          return { "اسم السائق": driver.name, "موقع العمل": driver.work_location, "جهة الصرف": driver.payment_source, "قيمة اليوم": driver.day_cost, "عدد الأيام": totalDays, "التكلفة الأساسية": baseCost, "مستحقات أخرى": extrasTotal, "خصومات": deductionsTotal, "إجمالي التكلفة": totalCost, };
+          return { "اسم السائق": driver.name, "موقع العمل": driver.work_location, "جهة الصرف": driver.payment_source, "قيمة اليوم": driver.daily_rate, "عدد الأيام": totalDays, "التكلفة الأساسية": baseCost, "مستحقات أخرى": extrasTotal, "خصومات": deductionsTotal, "إجمالي التكلفة": totalCost, };
       });
       const ws = XLSX.utils.json_to_sheet(exportData);
       const wb = XLSX.utils.book_new();
@@ -189,7 +203,7 @@ export default function TransportCosts() {
             <input required name="name" placeholder="الاسم" className="border p-2 rounded" defaultValue={editingDriver?.name || ""} />
             <input required name="workLocation" placeholder="موقع العمل" className="border p-2 rounded" defaultValue={editingDriver?.work_location || ""} />
             <input required name="paymentSource" placeholder="جهة الصرف" className="border p-2 rounded" defaultValue={editingDriver?.payment_source || ""} />
-            <input required name="dayCost" type="number" placeholder="تكلفة اليوم" className="border p-2 rounded" defaultValue={editingDriver?.day_cost || ""} />
+            <input required name="dayCost" type="number" placeholder="تكلفة اليوم" className="border p-2 rounded" defaultValue={editingDriver?.daily_rate || ""} />
             {editingDriver && (
               <div className="flex items-center justify-center h-full">
                 <label className="flex items-center gap-2 cursor-pointer bg-gray-100 p-2 rounded-lg">
@@ -240,7 +254,7 @@ export default function TransportCosts() {
               const { totalDays, totalCost, extrasTotal, deductionsTotal } = getDriverTotal(driver.id);
               return (
                 <tr key={driver.id} className={`text-center text-sm ${!driver.is_active ? 'bg-gray-200 text-gray-500 italic' : 'hover:bg-gray-50'}`}>
-                  <td className="border px-2 py-1">{driver.name}</td><td>{driver.day_cost}</td>
+                  <td className="border px-2 py-1">{driver.name}</td><td>{driver.daily_rate}</td>
                   <td className="font-bold">{totalDays}</td><td>{extrasTotal}</td><td>{deductionsTotal}</td>
                   <td className="font-bold">{totalCost}</td>
                   {dayStrings.map((date, index) => (

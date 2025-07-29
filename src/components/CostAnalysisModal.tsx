@@ -1,47 +1,65 @@
-// --- START OF FILE src/components/CostAnalysisModal.tsx (الكامل والنهائي) ---
+// --- START OF FILE src/components/CostAnalysisModal.tsx (النسخة النهائية الصحيحة) ---
 
 import React, { useMemo } from 'react';
 import { X, FileDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { calculateCostDistribution } from '../utils/fullAttendanceCalculator.ts';
+import type { Employee, Loan, BonusDeduction, PayrollReportItem, AttendanceRecords, PublicHoliday } from '../types.ts';
 
-export default function CostAnalysisModal({ employees, attendanceRecords, publicHolidays, payrollDays, onClose, bonuses, loans, payrollSettings, payrollData, periodKey }) {
+// --- بداية التعديل 1: إزالة props غير مستخدمة من الواجهة ---
+interface CostAnalysisModalProps {
+  employees: Employee[];
+  attendanceRecords: AttendanceRecords;
+  payrollDays: Date[];
+  onClose: () => void;
+  bonuses: BonusDeduction[];
+  payrollSettings: any;
+  payrollData: PayrollReportItem[];
+  periodKey: string;
+  // تم حذف publicHolidays و loans من هنا
+}
+// --- نهاية التعديل 1 ---
+
+// --- بداية التعديل 2: إزالة props غير مستخدمة من تعريف المكون ---
+export default function CostAnalysisModal({ employees, attendanceRecords, payrollDays, onClose, bonuses, payrollSettings, payrollData, periodKey }: CostAnalysisModalProps) {
+// --- نهاية التعديل 2 ---
   
   const analysisData = useMemo(() => {
     const data: { [empName: string]: { distribution: any, netSalary: number } } = {};
-    const excludedEmployees = new Set(payrollSettings?.excluded_employee_ids || []);
+    const excludedEmployees = new Set<number>(payrollSettings?.excluded_employee_ids || []);
     const generalBonusDays = payrollSettings?.general_bonus_days || 0;
     
-    employees.forEach((emp: any) => {
-      const empPayrollData = payrollData.find((pd: any) => pd.employee.id === emp.id);
+    employees.forEach((emp: Employee) => {
+      const empPayrollData = payrollData.find((pd: PayrollReportItem) => pd.employee.id === emp.id);
       if (!empPayrollData) return;
 
       const distribution = calculateCostDistribution(
         emp, 
         attendanceRecords, 
-        publicHolidays, 
         payrollDays, 
         bonuses, 
-        loans, 
-        periodKey, 
         excludedEmployees, 
         generalBonusDays,
         empPayrollData.totalOvertimePay,
         empPayrollData.loanInstallment
       );
+      
       data[emp.name] = { distribution, netSalary: empPayrollData.netSalary };
     });
     return data;
-  }, [employees, attendanceRecords, publicHolidays, payrollDays, bonuses, loans, payrollSettings, payrollData]);
+  // --- بداية التعديل 3: إزالة props غير مستخدمة من مصفوفة الاعتماديات ---
+  }, [employees, attendanceRecords, payrollDays, bonuses, payrollSettings, payrollData]);
+  // --- نهاية التعديل 3 ---
 
   const grandTotals = useMemo(() => {
     return Object.values(analysisData).reduce((acc: any, { distribution }) => {
+        if (!distribution) return acc; // حماية إضافية
         Object.values(distribution).forEach((details: any) => {
-            acc.baseCost += details.baseCost;
-            acc.allowancesCost += details.allowancesCost;
-            acc.otherAdditions += details.otherAdditions;
-            acc.totalDeductions += details.totalDeductions;
-            acc.netCost += details.netCost;
+            acc.baseCost = (acc.baseCost || 0) + details.baseCost;
+            acc.allowancesCost = (acc.allowancesCost || 0) + details.allowancesCost;
+            acc.otherAdditions = (acc.otherAdditions || 0) + details.otherAdditions;
+            acc.totalDeductions = (acc.totalDeductions || 0) + details.totalDeductions;
+            acc.netCost = (acc.netCost || 0) + details.netCost;
         });
         return acc;
     }, { baseCost: 0, allowancesCost: 0, otherAdditions: 0, totalDeductions: 0, netCost: 0 });
@@ -50,6 +68,7 @@ export default function CostAnalysisModal({ employees, attendanceRecords, public
   const handleExportAnalysis = () => {
     const dataForExport: (string | number)[][] = [['الموظف', 'صافي الراتب', 'الموقع', 'أيام', 'تكلفة الأساسي', 'تكلفة البدلات', 'تكلفة إضافي ومنح', 'تكلفة الخصومات', 'صافي تكلفة الموقع']];
     Object.entries(analysisData).forEach(([empName, { distribution, netSalary }]: [string, any]) => {
+      if (!distribution) return; // حماية إضافية
       Object.entries(distribution).forEach(([locationName, details]: [string, any], index: number) => {
         dataForExport.push([
             index === 0 ? empName : '',
@@ -78,6 +97,7 @@ export default function CostAnalysisModal({ employees, attendanceRecords, public
           </div>
         </div>
         <div className="flex-1 overflow-auto">
+          {/* باقي الكود لم يتغير */}
           <table className="w-full text-sm border-collapse">
             <thead className="bg-gray-100 sticky top-0 z-10">
               <tr>
@@ -97,6 +117,7 @@ export default function CostAnalysisModal({ employees, attendanceRecords, public
                 <tr><td colSpan={9} className="text-center p-8 text-gray-500">لا توجد بيانات لعرضها.</td></tr>
               )}
               {Object.entries(analysisData).map(([empName, { distribution, netSalary }]: [string, any]) => {
+                if (!distribution) return null; // حماية إضافية
                 const distributionEntries = Object.entries(distribution);
                 if (distributionEntries.length === 0) return null;
                 return (

@@ -1,17 +1,29 @@
-// --- START OF FILE src/components/PayrollDetailModal.tsx (النهائي مع PDF وتصغير الحجم) ---
+// --- START OF FILE src/components/PayrollDetailModal.tsx (نسخة محسنة مع الأنواع) ---
 
 import React, { useRef } from 'react';
 import { X, Printer } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
-const DetailRow = ({ label, value, colorClass = 'text-gray-900', isBold = false }) => (
+// --- بداية التعديل ---
+// تعريف واجهة (interface) للـ props الخاصة بـ DetailRow
+interface DetailRowProps {
+    label: string;
+    value: string | number; // القيمة يمكن أن تكون نصاً أو رقماً
+    colorClass?: string;    // '?' تعني أن هذا الـ prop اختياري
+    isBold?: boolean;       // وهذا أيضاً اختياري
+}
+
+// استخدام الواجهة في تعريف المكون
+const DetailRow: React.FC<DetailRowProps> = ({ label, value, colorClass = 'text-gray-900', isBold = false }) => (
+// --- نهاية التعديل ---
     <div className="flex justify-between items-center py-2 px-3 border-b">
         <span className={`font-semibold text-sm ${isBold ? 'text-gray-800' : 'text-gray-600'}`}>{label}</span>
         <span className={`font-mono font-bold ${colorClass} ${isBold ? 'text-base' : 'text-base'}`}>{value}</span>
     </div>
 );
 
+// لا تغيير هنا، كل شيء سليم
 export default function PayrollDetailModal({ reportItem, onClose }: { reportItem: any, onClose: () => void }) {
     const modalContentRef = useRef<HTMLDivElement>(null);
 

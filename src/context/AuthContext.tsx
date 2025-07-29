@@ -1,4 +1,4 @@
-// --- START OF FILE src/context/AuthContext.tsx (كامل ومع الأنواع الصحيحة) ---
+// --- START OF FILE src/context/AuthContext.tsx (النسخة النهائية الصحيحة) ---
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient.js';
@@ -29,9 +29,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const managerEmail = 'info@thinksolutioneg.com';
+  // يفضل جلب هذا من متغيرات البيئة
+  const managerEmail = import.meta.env.VITE_MANAGER_EMAIL || 'info@thinksolutioneg.com';
 
-  const fetchSessionAndPermissions = async () => {
+  const fetchSessionAndPermissions = useCallback(async () => { // استخدام useCallback
     const { data: { session } } = await supabase.auth.getSession();
     setSession(session);
     setUser(session?.user ?? null);
@@ -77,23 +78,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Error fetching permissions:', error.message);
       setPermissions([]);
     } else {
-      setPermissions(userPermissions as Permission[] || []);
+      // --- بداية التعديل 1: حل مشكلة عدم تطابق الأنواع ---
+      // هذا يخبر TypeScript بتجاهل النوع المستنتج واعتبار البيانات من نوع Permission[]
+      setPermissions((userPermissions as unknown as Permission[]) || []);
+      // --- نهاية التعديل 1 ---
     }
 
     setLoading(false);
-  };
+  }, []); // تم إزالة الاعتماديات غير الضرورية لأن الدالة تستدعى مرة واحدة
 
   useEffect(() => {
     fetchSessionAndPermissions();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event: string, session: Session | null) => {
+    // --- بداية التعديل 2: حل مشكلة المتغير غير المستخدم ---
+    // تم تغيير 'session' إلى '_session' للإشارة إلى أنه غير مستخدم عن قصد
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event: string, _session: Session | null) => {
       fetchSessionAndPermissions();
     });
+    // --- نهاية التعديل 2 ---
 
     return () => {
       authListener?.subscription.unsubscribe();
     };
-  }, []);
+  }, [fetchSessionAndPermissions]); // إضافة الاعتمادية الصحيحة
 
   const login = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });

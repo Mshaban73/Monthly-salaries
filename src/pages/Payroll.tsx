@@ -1,8 +1,8 @@
-// --- START OF FILE src/pages/Payroll.tsx (النهائي بالكامل - بدون ميزة الفلتر الإضافية) ---
+// --- START OF FILE src/pages/Payroll.tsx (الكامل والنهائي والمصحح) ---
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { X, Save, FileDown, DollarSign, PackagePlus, PackageMinus, Landmark, Edit, MapPin, BarChart2, Search, Loader } from 'lucide-react';
+import { X, Save, FileDown, DollarSign, PackagePlus, PackageMinus, Landmark, Edit, MapPin, BarChart2, Search, Loader, CheckCircle, XCircle, FileUp } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../context/AuthContext.tsx';
 import { supabase } from '../supabaseClient.js';
@@ -12,6 +12,7 @@ import ManagementModal from '../components/ManagementModal.tsx';
 import LoanManagementModal from '../components/LoanManagementModal.tsx';
 import LocationCostSummaryModal from '../components/LocationCostSummaryModal.tsx';
 import CostAnalysisModal from '../components/CostAnalysisModal.tsx';
+import type { Employee, PublicHoliday, BonusDeduction, Loan, PayrollReportItem, AttendanceRecords } from '../types';
 
 const months = getMonthsList();
 const years = getYearsList();
@@ -45,11 +46,11 @@ export default function Payroll() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
-  const [employees, setEmployees] = useState<any[]>([]);
-  const [attendanceRecords, setAttendanceRecords] = useState<any>({});
-  const [publicHolidays, setPublicHolidays] = useState<any[]>([]);
-  const [bonusesDeductions, setBonusesDeductions] = useState<any[]>([]);
-  const [loans, setLoans] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecords>({});
+  const [publicHolidays, setPublicHolidays] = useState<PublicHoliday[]>([]);
+  const [bonusesDeductions, setBonusesDeductions] = useState<BonusDeduction[]>([]);
+  const [loans, setLoans] = useState<Loan[]>([]);
   const [payrollSettings, setPayrollSettings] = useState<any>(null);
 
   const [selectedPeriod, setSelectedPeriod] = useState(() => {
@@ -61,7 +62,7 @@ export default function Payroll() {
     return getInitialPeriod();
   });
   
-  const [selectedEmployee, setSelectedEmployee] = useState<any | null>(null);
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [excludedEmployees, setExcludedEmployees] = useState<Set<number>>(new Set());
   const [filterLocation, setFilterLocation] = useState<string>('all');
   const [filterSource, setFilterSource] = useState<string>('all');
@@ -135,7 +136,7 @@ export default function Payroll() {
 
   const filteredEmployees = useMemo(() => employees.filter(emp => (filterLocation === 'all' || emp.work_location === filterLocation) && (filterSource === 'all' || emp.payment_source === filterSource) && (emp.name.toLowerCase().includes(searchTerm.toLowerCase()))), [employees, filterLocation, filterSource, searchTerm]);
   
-  const payrollData = useMemo(() => {
+  const payrollData: PayrollReportItem[] = useMemo(() => {
     const bonusDays = Number(generalBonusDays) || 0;
     return filteredEmployees.map(emp => {
       const summary = calculateAttendanceSummary(emp, attendanceRecords, publicHolidays, payrollDays);
@@ -188,7 +189,7 @@ export default function Payroll() {
 
   const payrollTotals = useMemo(() => { return payrollData.reduce((totals, data) => { const grossSalary = data.basePay + data.totalOvertimePay + data.totalAllowances; totals.grossSalary += grossSalary; totals.netSalary += data.netSalary; totals.totalDeductions += data.manualDeduction + data.loanInstallment; totals.totalAdditions += data.totalBonuses + data.generalBonus; return totals; }, { grossSalary: 0, netSalary: 0, totalDeductions: 0, totalAdditions: 0 }); }, [payrollData]);
 
-  const handleSaveBonusesSuccess = (newRecord: any) => {
+  const handleSaveBonusesSuccess = (newRecord: BonusDeduction) => {
     setBonusesDeductions(prev => {
         const existingIndex = prev.findIndex(r => r.employee_id === newRecord.employee_id && r.period === newRecord.period);
         if (existingIndex > -1) {
@@ -252,7 +253,9 @@ export default function Payroll() {
                               <td>{data.totalBonuses.toFixed(2)}</td><td>{data.generalBonus.toFixed(2)}</td>
                               <td>{data.loanInstallment.toFixed(2)}</td><td>{data.manualDeduction.toFixed(2)}</td>
                               <td className="font-bold text-lg text-green-700">{data.netSalary.toFixed(2)}</td>
-                              <td><button onClick={() => setSelectedEmployee(data.employee)} className="text-blue-600"><Edit size={16}/></button></td>
+                              {/* --- بداية التعديل --- */}
+                              <td><button onClick={() => setSelectedEmployee(employees.find(e => e.id === data.employee.id) || null)} className="text-blue-600"><Edit size={16}/></button></td>
+                              {/* --- نهاية التعديل --- */}
                               <td><input type="checkbox" checked={excludedEmployees.has(data.employee.id)} onChange={(e) => handleExcludeEmployee(data.employee.id, e.target.checked)} className="h-5 w-5 rounded"/></td>
                           </tr>
                       ))}
@@ -263,7 +266,18 @@ export default function Payroll() {
       {selectedEmployee && (<ManagementModal employee={selectedEmployee} periodKey={periodKey} existingRecord={bonusesDeductions.find(r => r.employee_id === selectedEmployee.id)} onClose={() => setSelectedEmployee(null)} onSaveSuccess={handleSaveBonusesSuccess} />)}
       {isLoanModalOpen && (<LoanManagementModal employees={employees} loans={loans} setLoans={setLoans} onClose={() => setIsLoanModalOpen(false)} />)}
       {locationCostModalData && (<LocationCostSummaryModal data={locationCostModalData} onClose={() => setLocationCostModalData(null)} />)}
-      {isCostAnalysisModalOpen && (<CostAnalysisModal onClose={() => setIsCostAnalysisModalOpen(false)} employees={filteredEmployees} attendanceRecords={attendanceRecords} publicHolidays={publicHolidays} payrollDays={payrollDays} periodKey={periodKey} bonuses={bonusesDeductions} loans={loans} payrollSettings={payrollSettings} payrollData={payrollData} />)}
+      {isCostAnalysisModalOpen && (
+        <CostAnalysisModal 
+          onClose={() => setIsCostAnalysisModalOpen(false)} 
+          employees={filteredEmployees} 
+          attendanceRecords={attendanceRecords} 
+          payrollDays={payrollDays} 
+          periodKey={periodKey} 
+          bonuses={bonusesDeductions} 
+          payrollSettings={payrollSettings} 
+          payrollData={payrollData} 
+        />
+      )}
     </div>
   );
 }

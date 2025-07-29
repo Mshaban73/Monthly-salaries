@@ -1,8 +1,10 @@
-// --- START OF FILE src/utils/fullAttendanceCalculator.ts (النسخة الكاملة والنهائية) ---
+// --- START OF FILE src/utils/fullAttendanceCalculator.ts (النسخة النهائية النظيفة) ---
 
 import { toYMDString } from './attendanceCalculator.ts';
 
-type Employee = any;
+// تعريف الأنواع بشكل أكثر تحديداً لتحسين الكود
+type Employee = any; // يمكنك استبداله بواجهة Employee الحقيقية
+type BonusDeduction = any; // يمكنك استبداله بواجهة BonusDeduction الحقيقية
 type AttendanceRecords = { [date: string]: { [employeeId: number]: { hours: number; locations: string[]; } } };
 type PublicHoliday = { date: string; name: string; };
 
@@ -74,7 +76,18 @@ export const calculateLocationSummary = (employee: Employee, attendanceRecords: 
   return summary;
 };
 
-export const calculateCostDistribution = (employee: Employee, attendanceRecords: AttendanceRecords, publicHolidays: any[], payrollDays: Date[], bonuses: any[], loans: any[], periodKey: string, excludedEmployees: Set<number>, generalBonusDays: number, totalOvertimePay: number, loanInstallment: number) => {
+// --- بداية التعديل: إزالة المعاملات غير المستخدمة ---
+export const calculateCostDistribution = (
+    employee: Employee, 
+    attendanceRecords: AttendanceRecords, 
+    payrollDays: Date[], 
+    bonuses: BonusDeduction[], 
+    excludedEmployees: Set<number>, 
+    generalBonusDays: number, 
+    totalOvertimePay: number, 
+    loanInstallment: number
+) => {
+// --- نهاية التعديل ---
     const distribution: { [location: string]: any } = {};
     const locationSummary = calculateLocationSummary(employee, attendanceRecords, payrollDays);
     const totalWorkDays = Object.values(locationSummary).reduce((sum: number, days: number) => sum + days, 0);
@@ -86,7 +99,7 @@ export const calculateCostDistribution = (employee: Employee, attendanceRecords:
     }
 
     Object.entries(locationSummary).forEach(([location, days]) => {
-        const daysRatio = days / totalWorkDays;
+        const daysRatio = totalWorkDays > 0 ? (days / totalWorkDays) : 0; // حماية من القسمة على صفر
         const bdRecord = bonuses.find(r => r.employee_id === employee.id);
         const dailyRate = employee.salary_type === 'شهري' ? (employee.salary_amount / 30) : employee.salary_amount;
         

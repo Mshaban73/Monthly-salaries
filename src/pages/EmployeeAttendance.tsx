@@ -1,4 +1,4 @@
-// --- START OF FILE src/pages/EmployeeAttendance.tsx (كامل ومع الأنواع الصحيحة) ---
+// --- START OF FILE src/pages/EmployeeAttendance.tsx (كامل ومع التعديلات الصحيحة) ---
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
@@ -55,7 +55,9 @@ export default function EmployeeAttendance() {
 
         const [attRes, holRes, locRes] = await Promise.all([
             supabase.from('attendance').select('*').eq('employee_id', employeeId).gte('date', startDate).lte('date', endDate),
-            supabase.from('public_holidays').select('date, name'),
+            // --- بداية التعديل: طلب كل الحقول (*) بدلاً من حقول محددة ---
+            supabase.from('public_holidays').select('*').gte('date', startDate).lte('date', endDate),
+            // --- نهاية التعديل ---
             supabase.from('employees').select('work_location')
         ]);
         
@@ -91,7 +93,8 @@ export default function EmployeeAttendance() {
         const recordsToUpsert = Object.entries(attendance)
             .map(([date, details]) => {
                 const hours = parseFloat(details.hours);
-                if ((!isNaN(hours) && hours >= 0) || (details.location && details.location !== employee.work_location)) {
+                // تعديل بسيط: التأكد من أن `details` موجود قبل الوصول إلى خصائصه
+                if (details && ((!isNaN(hours) && hours >= 0) || (details.location && details.location !== employee.work_location))) {
                     return {
                         employee_id: employee.id,
                         date: date,
@@ -102,7 +105,7 @@ export default function EmployeeAttendance() {
                 }
                 return null;
             })
-            .filter(Boolean);
+            .filter((record): record is NonNullable<typeof record> => record !== null); // تحسين النوع للحماية
 
         if (recordsToUpsert.length > 0) {
             const { error } = await supabase.from('attendance').upsert(recordsToUpsert, {

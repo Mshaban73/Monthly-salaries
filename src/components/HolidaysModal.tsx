@@ -1,4 +1,4 @@
-// --- START OF FILE src/components/HolidaysModal.tsx (كامل مع ميزة التعديل) ---
+// --- START OF FILE src/components/HolidaysModal.tsx (كامل ومع دالة الحذف المكتملة) ---
 
 import React, { useState } from 'react';
 import { X, Plus, Trash2, Edit, Save } from 'lucide-react';
@@ -59,14 +59,31 @@ function HolidaysModal({ isOpen, onClose, publicHolidays, setPublicHolidays, can
             }
             const { data, error } = await supabase.from('public_holidays').insert({ name: newHolidayName, date: newHolidayDate }).select().single();
             if (error) { alert('فشل إضافة العطلة.'); console.error(error); } 
-            else {
+            else if (data) { // التأكد من أن data ليست null
                 setPublicHolidays([...publicHolidays, data].sort((a, b) => a.date.localeCompare(b.date)));
             }
         }
         handleCancelEdit(); // مسح الفورم بعد الحفظ
     };
 
-    const handleDeleteHoliday = async (holidayToDelete: PublicHoliday) => { /* ... (نفس دالة الحذف) ... */ };
+    // --- بداية التعديل: إكمال دالة الحذف ---
+    const handleDeleteHoliday = async (holidayToDelete: PublicHoliday) => {
+        if (window.confirm(`هل أنت متأكد من حذف عطلة "${holidayToDelete.name}"؟`)) {
+            const { error } = await supabase
+                .from('public_holidays')
+                .delete()
+                .eq('id', holidayToDelete.id);
+
+            if (error) {
+                alert('فشل حذف العطلة.');
+                console.error('Error deleting holiday:', error);
+            } else {
+                setPublicHolidays(publicHolidays.filter(h => h.id !== holidayToDelete.id));
+                alert('تم حذف العطلة بنجاح.');
+            }
+        }
+    };
+    // --- نهاية التعديل ---
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4" onClick={onClose}>

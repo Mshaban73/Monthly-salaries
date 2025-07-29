@@ -1,14 +1,13 @@
-// --- START OF FILE src/pages/UserPermissionsPage.tsx (النهائي - إدارة فقط) ---
+// --- START OF FILE src/pages/UserPermissionsPage.tsx (كامل ومع التعديلات الصحيحة) ---
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { UserPlus, ShieldCheck, Edit, Trash2, Loader, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.tsx';
 import { supabase } from '../supabaseClient.js';
 import PermissionsModal from '../components/PermissionsModal.tsx';
-import type { UserWithPermissions } from '../types.ts';
+import type { UserWithPermissions, Page, Permission } from '../types.ts'; // استيراد Page و Permission
 
-interface Page { id: number; name: string; }
-const managerEmail = 'info@thinksolutioneg.com'; // استبدل بالإيميل الفعلي للمدير
+const managerEmail = import.meta.env.VITE_MANAGER_EMAIL || 'info@thinksolutioneg.com'; // استخدام متغيرات البيئة
 
 export default function UserPermissionsPage() {
   const { can, user: currentUser } = useAuth();
@@ -25,7 +24,12 @@ export default function UserPermissionsPage() {
         const { data: profiles, error: profilesError } = await supabase.from('profiles').select('id, email');
         if (profilesError) throw profilesError;
 
-        const { data: permissions, error: permError } = await supabase.from('permissions').select('*, pages(id, name)');
+        const { data: permissions, error: permError } = await supabase
+            .from('permissions')
+            .select(`
+                *, 
+                pages (id, name)
+            `);
         if (permError) throw permError;
 
         const { data: pagesData, error: pagesError } = await supabase.from('pages').select('*');
@@ -37,12 +41,17 @@ export default function UserPermissionsPage() {
             return {
                 id: profile.id,
                 profiles: { id: profile.id, email: profile.email },
-                permissions: userPermissions
+                permissions: userPermissions as Permission[] // استخدام as لتحديد النوع
             };
         });
         setAllUsersWithPerms(userList);
     } catch (error) {
-        console.error("Error fetching data:", error);
+        // التحقق من نوع الخطأ قبل عرضه
+        if (error instanceof Error) {
+            console.error("Error fetching data:", error.message);
+        } else {
+            console.error("An unknown error occurred:", error);
+        }
     } finally {
         setLoading(false);
     }
@@ -61,6 +70,7 @@ export default function UserPermissionsPage() {
     if (userToDelete.profiles.email === currentUser?.email) { alert('لا يمكنك حذف نفسك.'); return; }
     if (userToDelete.profiles.email === managerEmail) { alert('لا يمكن حذف المدير العام.'); return; }
     if (window.confirm(`هل أنت متأكد من حذف المستخدم "${userToDelete.profiles.email}"؟ سيتم حذف كل بياناته بشكل نهائي.`)) {
+        // تأكد من أن لديك صلاحيات admin لحذف المستخدمين
         const { error } = await supabase.auth.admin.deleteUser(userToDelete.id);
         if (error) {
             alert(`فشل حذف المستخدم: ${error.message}`);
@@ -111,15 +121,18 @@ export default function UserPermissionsPage() {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-                {user.permissions.filter(p => p.can_view).map((p: any) => (
-                    <span key={p.pages.id} className="bg-gray-200 text-gray-700 text-xs font-semibold px-2.5 py-0.5 rounded-full">{p.pages.name}</span>
+                {user.permissions.filter(p => p.can_view).map((p: Permission) => ( // استخدام النوع الصحيح
+                    // التأكد من وجود p.pages قبل الوصول إليه
+                    p.pages && <span key={p.pages.id} className="bg-gray-200 text-gray-700 text-xs font-semibold px-2.5 py-0.5 rounded-full">{p.pages.name}</span>
                 ))}
             </div>
           </div>
         ))}
       </div>
       
-      {isModalOpen && (
+      {/* --- بداية التعديل --- */}
+      {/* نعرض المكون فقط إذا كان isModalOpen صحيحاً و editingUser لديه قيمة */}
+      {isModalOpen && editingUser && (
         <PermissionsModal 
           user={editingUser}
           allPages={allPages}
@@ -127,6 +140,7 @@ export default function UserPermissionsPage() {
           onClose={() => setIsModalOpen(false)}
         />
       )}
+      {/* --- نهاية التعديل --- */}
     </div>
   );
 };

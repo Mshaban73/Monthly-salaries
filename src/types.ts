@@ -1,114 +1,154 @@
-// --- START OF FILE src/types.ts (الكامل والشامل والنهائي) ---
+// --- START OF FILE: src/types.ts (النسخة النهائية الكاملة والمصححة) ---
 
-// 1. البدلات
-export interface Allowance {
-  amount: number;
-  type: 'شهري' | 'يومي';
-}
-
-// 2. الموظفون (كما هو في قاعدة البيانات)
+// 1. النوع الأساسي للموظف
 export interface Employee {
   id: number;
   created_at: string;
   name: string;
   job_title: string;
-  work_location: string;
+  is_active: boolean;
   salary_type: 'شهري' | 'يومي';
   salary_amount: number;
-  payment_source: string;
+  work_location: string;
   hours_per_day: number;
   rest_days: string[];
   is_head_office: boolean;
-  is_active: boolean;
+  payment_source: string;
   transport_allowance?: Allowance;
   expatriation_allowance?: Allowance;
   meal_allowance?: Allowance;
   housing_allowance?: Allowance;
 }
 
-// 3. السائقون
-export interface Driver {
-    id: number;
-    created_at: string;
-    name: string;
-    work_location: string;
-    payment_source: string;
-    day_cost: number;
-    is_active: boolean;
+// 2. نوع البدلات
+export interface Allowance {
+  type: 'شهري' | 'يومي';
+  amount: number;
 }
 
-// 4. العطلات الرسمية
+// 3. نوع الإجازات الرسمية
 export interface PublicHoliday {
-    id: number;
-    created_at: string;
-    name: string;
-    date: string; // YYYY-MM-DD
+  id: number;
+  created_at: string;
+  date: string;
+  name: string;
 }
 
-// 5. سجلات الحضور
-export interface AttendanceRecord {
-    id: number;
-    created_at: string;
-    employee_id: number;
-    date: string; // YYYY-MM-DD
-    hours: number;
-    location: string;
-    status: string;
-}
-
-// 6. السلف
+// 4. نوع السلف
 export interface Loan {
-    id: number;
-    employee_id: number;
-    total_amount: number;
-    installments: number;
-    start_date: string; // YYYY-MM
-    description?: string;
+  id: number;
+  created_at: string;
+  employee_id: number;
+  total_amount: number;
+  installments: number;
+  installment_amount: number;
+  description?: string;
+  start_date: string;
+  status: 'active' | 'paid';
+  employees?: { name: string }; 
 }
 
-// 7. المكافآت والخصومات
+// 5. نوع المكافآت والخصومات اليدوية
 export interface BonusDeduction {
-    id: number;
-    employee_id: number;
-    period: string; // YYYY-MM
-    bonus_amount: number;
-    deduction_amount: number;
-    notes?: string;
+  id: number;
+  employee_id: number;
+  period: string; // تم توحيد الاسم إلى 'period'
+  bonus_amount?: number;
+  deduction_amount?: number;
 }
 
-// 8. كشوف الرواتب التاريخية
-export interface HistoricalPayroll {
-    id: number;
-    created_at: string;
-    period: string; // YYYY-MM
-    report_data: {
-        report: any[]; // يمكن تحسين هذا النوع لاحقًا
-    };
-    transport_cost_data?: {
-        report: any[]; // يمكن تحسين هذا النوع لاحقًا
-    };
+// 6. نوع سجل الحضور الفردي
+export interface AttendanceRecord {
+  id: number;
+  date: string;
+  employee_id: number;
+  hours: number;
+  location: string;
+  status: string;
 }
 
-// 9. الصلاحيات
-export interface Permission {
-    profile_id: string;
-    page_id: number;
-    can_view: boolean;
-    can_add: boolean;
-    can_edit: boolean;
-    can_delete: boolean;
-    pages: {
+// 7. نوع سجلات الحضور المجمعة
+export type AttendanceRecords = {
+  [date: string]: {
+    [employeeId: number]: {
+      hours: number;
+      locations: string[];
+    };
+  };
+};
+
+// 8. نوع عناصر تقرير الرواتب
+export interface PayrollReportItem {
+    employee: {
         id: number;
         name: string;
+        work_location: string;
+        payment_source: string;
     };
+    basePay: number;
+    totalWorkDays: number;
+    totalOvertimePay: number;
+    totalBonuses: number;
+    totalAllowances: number;
+    manualDeduction: number;
+    generalBonus: number;
+    loanInstallment: number;
+    netSalary: number;
 }
 
-// 10. المستخدم (كما يأتي من Supabase مدمجًا)
+// 9. نوع سائقي النقل
+export interface Driver {
+  id: number;
+  created_at: string;
+  name: string;
+  daily_rate: number;
+  is_active: boolean;
+  work_location: string;
+  payment_source: string;
+}
+
+// 10. نوع الصلاحيات
+export interface Permission {
+  id?: number; 
+  profile_id: string;
+  page_id: number;
+  can_view: boolean;
+  can_add: boolean;
+  can_edit: boolean;
+  can_delete: boolean;
+  pages: { id: number; name: string; }; 
+}
+
+// 11. نوع الصفحات (للصلاحيات)
+export interface Page {
+    id: number;
+    name: string;
+}
+
+// 12. نوع المستخدم مع صلاحياته
 export interface UserWithPermissions {
     id: string;
-    profiles: {
-        id: string;
-        email: string;
-    };
+    profiles: { id: string, email: string };
     permissions: Permission[];
 }
+
+// 13. نوع بيانات الرواتب التاريخية
+export interface HistoricalPayroll {
+  id: number;
+  period: string;
+  data: any;
+  created_at: string;
+}
+
+// 14. نوع السجلات المالية (للسائقين) - تم تصحيحه
+export interface FinancialItem {
+  id?: number;
+  driver_id: number;
+  period: string;
+  type: 'extra' | 'deduction';
+  amount: number;
+  description: string;
+  note?: string; // يتوافق الآن مع ما يتوقعه FinancialsModal
+}
+
+// --- END OF FILE: src/types.ts ---
