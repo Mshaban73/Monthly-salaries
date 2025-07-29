@@ -1,11 +1,30 @@
-// --- START OF FILE src/pages/Employees.tsx (كامل ومع الأنواع الصحيحة) ---
+// --- START OF FILE src/pages/Employees.tsx (كامل ومُعدَّل لدعم القراءة أوفلاين) ---
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { PlusCircle, Trash2, Edit, Search, FileDown, FileUp, CheckCircle, XCircle, Loader } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../context/AuthContext.tsx';
 import { supabase } from '../supabaseClient.js';
-import type { Employee, Allowance } from '../types.ts';
+import { Employee, Allowance } from '../types.ts';
+import { useLiveQuery } from 'dexie-react-hooks'; // <-- 1. استيراد hook جديد
+import { db } from '../db.ts'; // <-- 2. استيراد قاعدة البيانات المحلية
+
+// --- 3. دالة جديدة لمزامنة بيانات الموظفين ---
+const syncEmployees = async () => {
+  try {
+    console.log('Attempting to sync employees from Supabase...');
+    const { data, error } = await supabase.from('employees').select('*').order('created_at', { ascending: false });
+    if (error) throw error;
+    
+    // حفظ البيانات المحدثة في قاعدة البيانات المحلية (Dexie)
+    await db.employees.bulkPut(data || []);
+    console.log('Employees sync successful!');
+    return { success: true };
+  } catch (error) {
+    console.error('Employees sync failed, app is likely offline.', error);
+    return { success: false };
+  }
+};
 
 interface FormData {
     name: string; jobTitle: string; workLocation: string;
@@ -25,7 +44,9 @@ const selectStyles = `${inputStyles} bg-white`;
 
 export default function Employees() {
   const { can } = useAuth();
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  // --- 4. تعديل جلب البيانات ليقرأ من Dexie ---
+  const employees = useLiveQuery(() => db.employees.orderBy('created_at').reverse().toArray(), []);
+  
   const [loading, setLoading] = useState(true);
   const [employeeData, setEmployeeData] = useState<FormData>(initialFormState);
   const [showForm, setShowForm] = useState(false);
@@ -33,17 +54,17 @@ export default function Employees() {
   const [searchTerm, setSearchTerm] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { fetchEmployees(); }, []);
-
-  const fetchEmployees = async () => { 
+  // --- 5. تعديل useEffect ليقوم بالمزامنة مرة واحدة ---
+  useEffect(() => {
+    const runInitialSync = async () => {
       if (!can('view', 'Employees')) { setLoading(false); return; } 
-      setLoading(true); 
-      const { data, error } = await supabase.from('employees').select('*').order('created_at', { ascending: false }); 
-      if (error) { console.error('Error fetching employees:', error); alert('فشل في جلب بيانات الموظفين.'); } 
-      else { setEmployees(data || []); } 
-      setLoading(false); 
-  };
-  
+      setLoading(true);
+      await syncEmployees();
+      setLoading(false);
+    };
+    runInitialSync();
+  }, [can]);
+
   const filteredEmployees = useMemo(() => { if (!employees) return []; return employees.filter(emp => emp.name.toLowerCase().includes(searchTerm.toLowerCase())); }, [employees, searchTerm]);
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => { 
@@ -98,10 +119,11 @@ export default function Employees() {
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // (المرحلة 3) - هذا سيعمل أونلاين فقط حالياً، وسنعدله لاحقاً
     const trimmedName = employeeData.name.trim();
     if (!trimmedName) { alert('الرجاء إدخال اسم الموظف.'); return; }
 
-    const isNameExists = employees.some(emp => emp.name.toLowerCase() === trimmedName.toLowerCase() && emp.id !== editingEmployeeId);
+    const isNameExists = (employees || []).some(emp => emp.name.toLowerCase() === trimmedName.toLowerCase() && emp.id !== editingEmployeeId);
     if (isNameExists) {
         alert('هذا الاسم موجود بالفعل. الرجاء إدخال اسم مختلف.');
         return;
@@ -114,22 +136,23 @@ export default function Employees() {
       if (!can('edit', 'Employees')) { alert('ليس لديك صلاحية للتعديل.'); return; }
       const { data, error } = await supabase.from('employees').update(submissionPayload).eq('id', editingEmployeeId).select().single();
       if (error) { alert(`فشل تحديث الموظف. الخطأ: ${error.message}`); console.error(error); } 
-      else { setEmployees((prev: Employee[]) => prev.map(emp => (emp.id === editingEmployeeId ? data : emp))); }
+      else { await db.employees.put(data); }
     } else {
       if (!can('add', 'Employees')) { alert('ليس لديك صلاحية للإضافة.'); return; }
       const { data, error } = await supabase.from('employees').insert(submissionPayload).select().single();
       if (error) { alert(`فشل إضافة الموظف. الخطأ: ${error.message}`); console.error(error); } 
-      else if (data) { setEmployees((prev: Employee[]) => [data, ...prev]); }
+      else if (data) { await db.employees.put(data); }
     }
     handleCancel();
   };
   
   const handleDelete = async (id: number) => { 
+      // (المرحلة 3) - هذا سيعمل أونلاين فقط حالياً، وسنعدله لاحقاً
       if (!can('delete', 'Employees')) { alert('ليس لديك صلاحية للحذف.'); return; } 
       if (window.confirm('هل أنت متأكد من حذف هذا الموظف؟')) { 
           const { error } = await supabase.from('employees').delete().eq('id', id); 
           if (error) { alert('فشل حذف الموظف.'); console.error(error); } 
-          else { setEmployees((prev: Employee[]) => prev.filter(emp => emp.id !== id)); } 
+          else { await db.employees.delete(id); } 
       } 
   };
   
@@ -142,7 +165,7 @@ export default function Employees() {
     XLSX.writeFile(wb, "employees_export.xlsx");
   };
 
-  const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
@@ -159,7 +182,7 @@ export default function Employees() {
           const { error } = await supabase.from('employees').insert(employeesToInsert);
           if (error) { throw error; }
           alert('تم استيراد الموظفين بنجاح!');
-          fetchEmployees();
+          await syncEmployees(); // إعادة المزامنة بعد الاستيراد
         }
       } catch (error: any) { alert(`فشل استيراد الملف. تأكد أن أعمدة الملف تطابق النموذج وأن الأسماء غير مكررة. الخطأ: ${error.message}`); console.error("Import error:", error); } 
       finally { if(fileInputRef.current) fileInputRef.current.value = ""; }
@@ -167,7 +190,7 @@ export default function Employees() {
     reader.readAsArrayBuffer(file);
   };
 
-  if (loading) { return <div className="flex justify-center items-center h-64"><Loader className="animate-spin text-blue-500" size={48} /></div>; }
+  if (loading && !employees?.length) { return <div className="flex justify-center items-center h-64"><Loader className="animate-spin text-blue-500" size={48} /></div>; }
   if (!can('view', 'Employees')) { return <div className="text-center p-8 bg-yellow-100 text-yellow-800 rounded-lg"><h1 className="text-2xl font-bold">صفحة الموظفين</h1><p className="mt-2">ليس لديك صلاحية لعرض هذه الصفحة.</p></div>; }
   
   return (

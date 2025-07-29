@@ -1,6 +1,6 @@
-// --- START OF FILE src/components/HolidaysModal.tsx (كامل ومع دالة الحذف المكتملة) ---
+// --- START OF FILE src/components/HolidaysModal.tsx (النسخة النهائية المصححة) ---
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react'; // تمت إضافة useEffect
 import { X, Plus, Trash2, Edit, Save } from 'lucide-react';
 import { supabase } from '../supabaseClient.js';
 import type { PublicHoliday } from '../types.ts';
@@ -9,11 +9,14 @@ interface HolidaysModalProps {
     isOpen: boolean;
     onClose: () => void;
     publicHolidays: PublicHoliday[];
-    setPublicHolidays: React.Dispatch<React.SetStateAction<PublicHoliday[]>>;
+    // --- بداية التعديل: تغيير نوع الـ prop ---
+    setPublicHolidays: (holidays: PublicHoliday[]) => void;
+    // --- نهاية التعديل ---
     canEdit: boolean;
 }
 
 function formatDateForDisplay(dateString: string): string {
+    if (!dateString) return '';
     const dateObj = new Date(dateString + 'T00:00:00Z');
     return dateObj.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
 }
@@ -22,6 +25,14 @@ function HolidaysModal({ isOpen, onClose, publicHolidays, setPublicHolidays, can
     const [newHolidayDate, setNewHolidayDate] = useState<string>('');
     const [newHolidayName, setNewHolidayName] = useState<string>('');
     const [editingHolidayId, setEditingHolidayId] = useState<number | null>(null);
+    
+    // استخدام نسخة محلية لإدارة القائمة داخل المودال لتجنب إعادة العرض غير الضرورية
+    const [localHolidays, setLocalHolidays] = useState(publicHolidays);
+
+    useEffect(() => {
+        setLocalHolidays(publicHolidays);
+    }, [publicHolidays]);
+
 
     if (!isOpen) return null;
 
@@ -41,32 +52,33 @@ function HolidaysModal({ isOpen, onClose, publicHolidays, setPublicHolidays, can
         if (!newHolidayDate || !newHolidayName) return;
 
         if (editingHolidayId) {
-            // --- وضع التعديل ---
             const { data, error } = await supabase
                 .from('public_holidays')
                 .update({ name: newHolidayName, date: newHolidayDate })
                 .eq('id', editingHolidayId)
                 .select()
                 .single();
+
             if (error) { alert('فشل تحديث العطلة.'); console.error(error); } 
             else {
-                setPublicHolidays(publicHolidays.map(h => h.id === editingHolidayId ? data : h).sort((a, b) => a.date.localeCompare(b.date)));
+                const updatedList = localHolidays.map(h => h.id === editingHolidayId ? data : h).sort((a, b) => a.date.localeCompare(b.date));
+                setPublicHolidays(updatedList); // تحديث الحالة الرئيسية
             }
         } else {
-            // --- وضع الإضافة ---
-            if (publicHolidays.some(h => h.date === newHolidayDate)) {
+            if (localHolidays.some(h => h.date === newHolidayDate)) {
                 alert('هذا التاريخ مضاف بالفعل كعطلة.'); return;
             }
             const { data, error } = await supabase.from('public_holidays').insert({ name: newHolidayName, date: newHolidayDate }).select().single();
+
             if (error) { alert('فشل إضافة العطلة.'); console.error(error); } 
-            else if (data) { // التأكد من أن data ليست null
-                setPublicHolidays([...publicHolidays, data].sort((a, b) => a.date.localeCompare(b.date)));
+            else if (data) {
+                const updatedList = [...localHolidays, data].sort((a, b) => a.date.localeCompare(b.date));
+                setPublicHolidays(updatedList); // تحديث الحالة الرئيسية
             }
         }
-        handleCancelEdit(); // مسح الفورم بعد الحفظ
+        handleCancelEdit();
     };
 
-    // --- بداية التعديل: إكمال دالة الحذف ---
     const handleDeleteHoliday = async (holidayToDelete: PublicHoliday) => {
         if (window.confirm(`هل أنت متأكد من حذف عطلة "${holidayToDelete.name}"؟`)) {
             const { error } = await supabase
@@ -78,12 +90,12 @@ function HolidaysModal({ isOpen, onClose, publicHolidays, setPublicHolidays, can
                 alert('فشل حذف العطلة.');
                 console.error('Error deleting holiday:', error);
             } else {
-                setPublicHolidays(publicHolidays.filter(h => h.id !== holidayToDelete.id));
+                const updatedList = localHolidays.filter(h => h.id !== holidayToDelete.id);
+                setPublicHolidays(updatedList); // تحديث الحالة الرئيسية
                 alert('تم حذف العطلة بنجاح.');
             }
         }
     };
-    // --- نهاية التعديل ---
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4" onClick={onClose}>
@@ -109,7 +121,7 @@ function HolidaysModal({ isOpen, onClose, publicHolidays, setPublicHolidays, can
                     <div>
                         <h3 className="text-md font-semibold text-gray-700 mb-2">قائمة العطلات</h3>
                         <div className="max-h-60 overflow-y-auto space-y-2 pr-2 border rounded-md p-2">
-                            {publicHolidays.map((holiday: PublicHoliday) => (
+                            {localHolidays.map((holiday: PublicHoliday) => (
                                 <div key={holiday.id} className="flex justify-between items-center bg-gray-50 p-3 rounded-md">
                                     <div><span className="font-bold">{holiday.name}</span><span className="text-sm text-gray-600 block">{formatDateForDisplay(holiday.date)}</span></div>
                                     {canEdit && (
