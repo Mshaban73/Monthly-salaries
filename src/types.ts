@@ -53,7 +53,7 @@ export interface Loan {
 export interface BonusDeduction {
   id: number;
   employee_id: number;
-  period: string; // تم توحيد الاسم إلى 'period'
+  period: string;
   bonus_amount?: number;
   deduction_amount?: number;
 }
@@ -142,7 +142,7 @@ export interface HistoricalPayroll {
   created_at: string;
 }
 
-// 14. نوع السجلات المالية (للسائقين) - تم تصحيحه
+// 14. نوع السجلات المالية (للسائقين)
 export interface FinancialItem {
   id?: number;
   driver_id: number;
@@ -150,7 +150,17 @@ export interface FinancialItem {
   type: 'extra' | 'deduction';
   amount: number;
   description: string;
-  note?: string; // يتوافق الآن مع ما يتوقعه FinancialsModal
+  note?: string;
 }
+
+// --- بداية الإضافة ---
+// 15. نوع حضور النقل
+export interface TransportAttendance {
+  id?: number; // هذا الحقل قد لا يأتي من Supabase ولكنه مفيد لـ Dexie
+  driver_id: number;
+  date: string;
+  trips: number;
+}
+// --- نهاية الإضافة ---
 
 // --- END OF FILE: src/types.ts ---

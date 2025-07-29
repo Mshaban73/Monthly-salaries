@@ -1,26 +1,27 @@
-// --- START OF FILE src/pages/Dashboard.tsx (كامل ومع الأنواع الصحيحة) ---
+// --- START OF FILE src/pages/Dashboard.tsx (العودة إلى النسخة الأصلية العاملة) ---
 
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Users, CalendarCheck, CalendarCog, Truck, Loader } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.tsx';
 import { supabase } from '../supabaseClient.js';
-import logo from '/logo.png'; // المسار الصحيح للصور في مجلد public
+import logo from '/logo.png';
 import HolidaysModal from '../components/HolidaysModal.tsx';
 import type { PublicHoliday } from '../types.ts';
 
 export default function Dashboard() {
   const { can } = useAuth();
+  // استخدمنا useState الأصلي
   const [stats, setStats] = useState({ totalEmployees: 0, attendanceToday: 0 });
   const [publicHolidays, setPublicHolidays] = useState<PublicHoliday[]>([]);
   const [loading, setLoading] = useState(true);
   const [isHolidaysModalOpen, setIsHolidaysModalOpen] = useState(false);
 
+  // استخدمنا useEffect الأصلي لجلب البيانات من Supabase
   useEffect(() => {
     const fetchDashboardData = async () => {
       setLoading(true);
       
-      // جلب عدد الموظفين النشطين فقط
       const { count: employeeCount, error: empError } = await supabase
         .from('employees')
         .select('*', { count: 'exact', head: true })
@@ -33,9 +34,9 @@ export default function Dashboard() {
 
       if (empError || holidaysError) {
         console.error('Error fetching dashboard data:', empError || holidaysError);
-        alert('فشل في جلب بيانات لوحة التحكم.');
+        // لا تستخدم alert هنا لتجنب إيقاف التطبيق
       } else {
-        setStats({ totalEmployees: employeeCount ?? 0, attendanceToday: 0 }); // الحضور سيتم حسابه لاحقاً
+        setStats({ totalEmployees: employeeCount ?? 0, attendanceToday: 0 });
         setPublicHolidays(holidaysData || []);
       }
 
@@ -77,7 +78,7 @@ export default function Dashboard() {
         isOpen={isHolidaysModalOpen} 
         onClose={() => setIsHolidaysModalOpen(false)} 
         publicHolidays={publicHolidays} 
-        setPublicHolidays={setPublicHolidays}
+        setPublicHolidays={setPublicHolidays} // استخدام setState مباشرة
         canEdit={can('edit', 'Dashboard')}
       />
     </div>
