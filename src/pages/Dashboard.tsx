@@ -1,86 +1,52 @@
-// --- START OF FILE src/pages/Dashboard.tsx (النسخة النهائية المصححة تماماً) ---
+// --- START OF FILE src/pages/Dashboard.tsx (العودة إلى النسخة الأصلية العاملة) ---
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Users, CalendarCheck, CalendarCog, Loader, Truck } from 'lucide-react'; // أضفت Truck
+import { Users, CalendarCheck, CalendarCog, Truck, Loader } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.tsx';
 import { supabase } from '../supabaseClient.js';
 import logo from '/logo.png';
 import HolidaysModal from '../components/HolidaysModal.tsx';
-import { Employee, PublicHoliday } from '../types.ts'; // استيراد Employee
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db.ts';
-
-// --- دالة المزامنة ---
-const syncDashboardData = async () => {
-  try {
-    console.log('Attempting to sync dashboard data from Supabase...');
-    
-    // --- تزامن الموظفين (مهم جداً للخطوة التالية) ---
-    const { data: employeesData, error: empError } = await supabase
-      .from('employees')
-      .select('*')
-      .eq('is_active', true);
-
-    const { data: holidaysData, error: holidaysError } = await supabase
-      .from('public_holidays')
-      .select('*')
-      .order('date', { ascending: true });
-
-    if (empError || holidaysError) {
-      throw empError || holidaysError;
-    }
-
-    // حفظ البيانات في قاعدة البيانات المحلية (Dexie)
-    await db.employees.bulkPut(employeesData || []);
-    await db.publicHolidays.bulkPut(holidaysData || []);
-    
-    console.log('Sync successful!');
-    return { success: true };
-    
-  } catch (error) {
-    console.error('Sync failed, app is likely offline.', error);
-    return { success: false };
-  }
-};
-
+import type { PublicHoliday } from '../types.ts';
 
 export default function Dashboard() {
   const { can } = useAuth();
+  // استخدمنا useState الأصلي
+  const [stats, setStats] = useState({ totalEmployees: 0, attendanceToday: 0 });
+  const [publicHolidays, setPublicHolidays] = useState<PublicHoliday[]>([]);
   const [loading, setLoading] = useState(true);
   const [isHolidaysModalOpen, setIsHolidaysModalOpen] = useState(false);
-  const [initialSyncDone, setInitialSyncDone] = useState(false);
 
-  // --- بداية التعديل 1: إصلاح استعلام Dexie ---
-  // سنقوم بجلب كل الموظفين ثم فلترتهم في الكود. Dexie أحياناً لا يحب الفهرسة على boolean.
-  // أو الطريقة الأفضل هي حساب العدد مباشرة
-  const totalEmployees = useLiveQuery(() => 
-    db.employees.where('is_active').equals(1).count()
-  , []); // ملاحظة: هذا يتطلب أن تكون قيمة is_active في قاعدة البيانات رقم (1 أو 0)
-  // حل بديل وأكثر أماناً:
-  const activeEmployees = useLiveQuery(() => 
-    db.employees.filter(emp => emp.is_active === true).toArray()
-  , []);
-  // --- نهاية التعديل 1 ---
+  // استخدمنا useEffect الأصلي لجلب البيانات من Supabase
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      setLoading(true);
+      
+      const { count: employeeCount, error: empError } = await supabase
+        .from('employees')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_active', true);
 
-  const localPublicHolidays = useLiveQuery(() => db.publicHolidays.toArray(), []);
-  
-  React.useEffect(() => {
-    const runSync = async () => {
-      await syncDashboardData();
+      const { data: holidaysData, error: holidaysError } = await supabase
+        .from('public_holidays')
+        .select('*')
+        .order('date', { ascending: true });
+
+      if (empError || holidaysError) {
+        console.error('Error fetching dashboard data:', empError || holidaysError);
+        // لا تستخدم alert هنا لتجنب إيقاف التطبيق
+      } else {
+        setStats({ totalEmployees: employeeCount ?? 0, attendanceToday: 0 });
+        setPublicHolidays(holidaysData || []);
+      }
+
       setLoading(false);
-      setInitialSyncDone(true);
     };
-    runSync();
+
+    fetchDashboardData();
   }, []);
 
-  // --- بداية التعديل 2: هذه الدالة صحيحة ولكننا نمررها للمكون الذي تم تعديله ---
-  const handleSetPublicHolidays = (updatedHolidays: PublicHoliday[]) => {
-    db.publicHolidays.bulkPut(updatedHolidays);
-  };
-  // --- نهاية التعديل 2 ---
-
-  if (loading || !initialSyncDone) {
+  if (loading) {
     return <div className="flex justify-center items-center h-64"><Loader className="animate-spin text-blue-500" size={48} /></div>;
   }
 
@@ -92,9 +58,9 @@ export default function Dashboard() {
       <div className="z-10">
         <h2 className="text-3xl font-bold text-gray-800 mb-6">لوحة التحكم الرئيسية</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white p-6 rounded-xl shadow-lg flex items-center justify-between"><div><p className="text-sm font-medium text-gray-500">إجمالي الموظفين النشطين</p><p className="text-3xl font-bold text-gray-900">{activeEmployees?.length ?? '...'}</p></div><div className="bg-blue-100 p-3 rounded-full"><Users className="text-blue-600" size={28} /></div></div>
-          <div className="bg-white p-6 rounded-xl shadow-lg flex items-center justify-between"><div><p className="text-sm font-medium text-gray-500">الحضور المسجل اليوم</p><p className="text-3xl font-bold text-gray-900">0</p></div><div className="bg-green-100 p-3 rounded-full"><CalendarCheck className="text-green-600" size={28} /></div></div>
-          <div className="bg-white p-6 rounded-xl shadow-lg flex items-center justify-between"><div><p className="text-sm font-medium text-gray-500">العطلات الرسمية</p><p className="text-3xl font-bold text-gray-900">{localPublicHolidays?.length ?? '...'}</p></div><div className="bg-yellow-100 p-3 rounded-full"><CalendarCog className="text-yellow-600" size={28} /></div></div>
+          <div className="bg-white p-6 rounded-xl shadow-lg flex items-center justify-between"><div><p className="text-sm font-medium text-gray-500">إجمالي الموظفين النشطين</p><p className="text-3xl font-bold text-gray-900">{stats.totalEmployees}</p></div><div className="bg-blue-100 p-3 rounded-full"><Users className="text-blue-600" size={28} /></div></div>
+          <div className="bg-white p-6 rounded-xl shadow-lg flex items-center justify-between"><div><p className="text-sm font-medium text-gray-500">الحضور المسجل اليوم</p><p className="text-3xl font-bold text-gray-900">{stats.attendanceToday}</p></div><div className="bg-green-100 p-3 rounded-full"><CalendarCheck className="text-green-600" size={28} /></div></div>
+          <div className="bg-white p-6 rounded-xl shadow-lg flex items-center justify-between"><div><p className="text-sm font-medium text-gray-500">العطلات الرسمية</p><p className="text-3xl font-bold text-gray-900">{publicHolidays.length}</p></div><div className="bg-yellow-100 p-3 rounded-full"><CalendarCog className="text-yellow-600" size={28} /></div></div>
         </div>
 
         <div>
@@ -111,8 +77,8 @@ export default function Dashboard() {
       <HolidaysModal 
         isOpen={isHolidaysModalOpen} 
         onClose={() => setIsHolidaysModalOpen(false)} 
-        publicHolidays={localPublicHolidays || []} 
-        setPublicHolidays={handleSetPublicHolidays}
+        publicHolidays={publicHolidays} 
+        setPublicHolidays={setPublicHolidays} // استخدام setState مباشرة
         canEdit={can('edit', 'Dashboard')}
       />
     </div>

@@ -1,4 +1,4 @@
-// --- START OF FILE src/pages/TransportCosts.tsx (كامل ومُعدَّل لدعم القراءة أوفلاين) ---
+// --- START OF FILE src/pages/TransportCosts.tsx (النهائي والمصحح بالكامل) ---
 
 import React, { useEffect, useState, useMemo } from "react";
 import * as XLSX from "xlsx";
@@ -8,9 +8,9 @@ import { supabase } from '../supabaseClient.js';
 import { getPayrollDays, getYearsList, getMonthsList, toYMDString } from '../utils/attendanceCalculator.ts';
 import FinancialsModal from '../components/FinancialsModal.tsx';
 import { Edit, Trash2, Save, DollarSign, Loader, FileDown, Search } from 'lucide-react';
-import { Driver, PublicHoliday, FinancialItem } from '../types.ts';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db.ts';
+// --- بداية التعديل 1: استيراد النوع الصحيح ---
+import type { Driver, PublicHoliday, FinancialItem } from '../types.ts';
+// --- نهاية التعديل 1 ---
 
 const months = getMonthsList();
 const years = getYearsList();
@@ -23,38 +23,22 @@ const getInitialPeriod = () => {
     return { month: today.getMonth() + 1, year: today.getFullYear() };
 };
 
-// --- دالة المزامنة الجديدة ---
-const syncTransportData = async (periodKey: string, dayStrings: string[]) => {
-  try {
-    console.log(`Syncing transport data for period ${periodKey}...`);
-    const [driversRes, attRes, finRes] = await Promise.all([
-      supabase.from('drivers').select('*').order('name'),
-      supabase.from('transport_attendance').select('*').in('date', dayStrings),
-      supabase.from('transport_financials').select('*').eq('period', periodKey),
-    ]);
-
-    if (driversRes.error || attRes.error || finRes.error) throw driversRes.error || attRes.error || finRes.error;
-    
-    // استخدام transaction لضمان أن كل العمليات تنجح معاً
-    await db.transaction('rw', db.drivers, db.transportAttendance, db.transportFinancials, async () => {
-        await db.drivers.bulkPut(driversRes.data || []);
-        await db.transportAttendance.bulkPut(attRes.data || []);
-        await db.transportFinancials.bulkPut(finRes.data || []);
-    });
-
-    console.log('Transport data sync successful!');
-    return { success: true };
-  } catch (error) {
-    console.error('Transport data sync failed, app is likely offline.', error);
-    return { success: false };
-  }
+type TransportAttendanceState = {
+  [driverId: number]: {
+    [date: string]: number;
+  };
 };
-
 
 export default function TransportCosts() {
   const { can } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [attendance, setAttendance] = useState<TransportAttendanceState>({});
+  // --- بداية التعديل 2: استخدام النوع الصحيح للحالة ---
+  const [financials, setFinancials] = useState<FinancialItem[]>([]);
+  // --- نهاية التعديل 2 ---
+  const [publicHolidays, setPublicHolidays] = useState<PublicHoliday[]>([]);
   
   const [selectedPeriod, setSelectedPeriod] = useState(getInitialPeriod);
   const [editingDriver, setEditingDriver] = useState<Driver | null>(null);
@@ -67,31 +51,32 @@ export default function TransportCosts() {
   const days = useMemo(() => getPayrollDays(selectedPeriod.year, selectedPeriod.month), [selectedPeriod]);
   const dayStrings = useMemo(() => days.map(d => toYMDString(d)), [days]);
 
-  // --- القراءة من Dexie باستخدام useLiveQuery ---
-  const drivers = useLiveQuery(() => db.drivers.toArray(), []);
-  const attendanceRecords = useLiveQuery(() => db.transportAttendance.where('date').anyOf(dayStrings).toArray(), [dayStrings]);
-  const financials = useLiveQuery(() => db.transportFinancials.where({ period: periodKey }).toArray(), [periodKey]);
-  const publicHolidays = useLiveQuery(() => db.publicHolidays.toArray(), []); // نفترض أنها تمت مزامنتها في صفحات أخرى
+  useEffect(() => {
+    fetchData();
+  }, [periodKey]);
 
-  // إعادة حساب كائن الحضور عند تغير السجلات
-  const attendance = useMemo(() => {
-    return (attendanceRecords || []).reduce((acc: { [driverId: number]: { [date: string]: number } }, rec) => {
+  const fetchData = async () => {
+    if (!can('view', 'Transport')) { setLoading(false); return; }
+    setLoading(true);
+
+    const [driversRes, attRes, finRes, holRes] = await Promise.all([
+      supabase.from('drivers').select('*').order('name'),
+      supabase.from('transport_attendance').select('*').in('date', dayStrings),
+      supabase.from('transport_financials').select('*').eq('period', periodKey),
+      supabase.from('public_holidays').select('*')
+    ]);
+
+    setDrivers(driversRes.data || []);
+    const attByDriver = (attRes.data || []).reduce((acc: TransportAttendanceState, rec: { driver_id: number, date: string, trips: number }) => {
       if (!acc[rec.driver_id]) acc[rec.driver_id] = {};
       acc[rec.driver_id][rec.date] = rec.trips;
       return acc;
     }, {});
-  }, [attendanceRecords]);
-
-  useEffect(() => {
-    const runSync = async () => {
-        if (!can('view', 'Transport')) { setLoading(false); return; }
-        setLoading(true);
-        await syncTransportData(periodKey, dayStrings);
-        setLoading(false);
-    }
-    runSync();
-  }, [periodKey, dayStrings, can]);
-
+    setAttendance(attByDriver);
+    setFinancials(finRes.data || []);
+    setPublicHolidays(holRes.data || []);
+    setLoading(false);
+  };
 
   const handleEditClick = (driver: Driver) => {
     setEditingDriver(driver);
@@ -110,52 +95,56 @@ export default function TransportCosts() {
         name: (form.elements.namedItem('name') as HTMLInputElement).value, 
         work_location: (form.elements.namedItem('workLocation') as HTMLInputElement).value, 
         payment_source: (form.elements.namedItem('paymentSource') as HTMLInputElement).value, 
-        daily_rate: Number((form.elements.namedItem('dayCost') as HTMLInputElement).value),
+        daily_rate: Number((form.elements.namedItem('dayCost') as HTMLInputElement).value), // <-- تصحيح اسم الحقل
         is_active: isDriverActive
     };
     if (editingDriver) {
-      const { data, error } = await supabase.from('drivers').update(driverData).eq('id', editingDriver.id).select().single();
-      if (error) { alert("فشل تحديث السائق"); } else if (data) { await db.drivers.put(data); }
+      const { error } = await supabase.from('drivers').update(driverData).eq('id', editingDriver.id);
+      if (error) alert("فشل تحديث السائق");
     } else {
-      const { data, error } = await supabase.from('drivers').insert({ ...driverData, is_active: true }).select().single();
-      if (error) { alert("فشل إضافة السائق"); } else if (data) { await db.drivers.put(data); }
+      const { error } = await supabase.from('drivers').insert({ ...driverData, is_active: true });
+      if (error) alert("فشل إضافة السائق");
     }
     handleCancelEdit();
     form.reset();
+    fetchData();
   };
 
   const deleteDriver = async (driverId: number) => {
     if (window.confirm("هل أنت متأكد؟")) {
       const { error } = await supabase.from('drivers').delete().eq('id', driverId);
-      if (error) { alert("فشل حذف السائق"); } else { await db.drivers.delete(driverId); }
+      if (error) alert("فشل حذف السائق");
+      else fetchData();
     }
   };
   
   const handleDayChange = async (driverId: number, date: string, value: number) => {
     const trips = isNaN(value) || value < 0 ? 0 : value;
     const record = { driver_id: driverId, date: date, trips: trips };
-    const { data, error } = await supabase.from('transport_attendance').upsert(record, { onConflict: 'driver_id, date' }).select().single();
+    const { error } = await supabase.from('transport_attendance').upsert(record, { onConflict: 'driver_id, date' });
     if (error) {
       console.error("Failed to save attendance:", error);
-      alert("فشل الحفظ، قد تكون غير متصل بالإنترنت.");
-    } else if (data) {
-      await db.transportAttendance.put(data);
+    } else {
+      setAttendance((prev: TransportAttendanceState) => ({ 
+        ...prev, 
+        [driverId]: { ...(prev[driverId] || {}), [date]: trips } 
+      }));
     }
   };
 
   const getDriverTotal = (driverId: number) => {
-    const driverRecords = attendance[driverId] || {};
-    const totalDays = Object.values(driverRecords).reduce((acc: number, val: number) => acc + Number(val || 0), 0);
-    const driver = (drivers || []).find((d) => d.id === driverId);
+    const records = attendance[driverId] || {};
+    const totalDays = Object.values(records).reduce((acc: number, val: number) => acc + Number(val || 0), 0);
+    const driver = drivers.find((d) => d.id === driverId);
     const baseCost = totalDays * (driver?.daily_rate || 0);
-    const driverFinancials = (financials || []).filter(f => f.driver_id === driverId);
+    const driverFinancials = financials.filter(f => f.driver_id === driverId);
     const extrasTotal = driverFinancials.filter(f => f.type === 'extra').reduce((sum, item) => sum + item.amount, 0);
     const deductionsTotal = driverFinancials.filter(f => f.type === 'deduction').reduce((sum, item) => sum + item.amount, 0);
     return { totalDays, totalCost: baseCost + extrasTotal - deductionsTotal, extrasTotal, deductionsTotal, baseCost };
   };
 
   const handleSaveToHistory = async () => {
-      const reportData = (drivers || []).map(driver => {
+      const reportData = drivers.map(driver => {
           const totals = getDriverTotal(driver.id);
           return {
               driver_id: driver.id,
@@ -185,7 +174,7 @@ export default function TransportCosts() {
   };
   
   const filteredDrivers = useMemo(() => 
-    (drivers || []).filter(driver => {
+    drivers.filter(driver => {
       const isActive = driver.is_active;
       const matchesSearch = driver.name.toLowerCase().includes(searchTerm.toLowerCase());
       if (showInactive) {
@@ -195,7 +184,7 @@ export default function TransportCosts() {
     })
   , [drivers, searchTerm, showInactive]);
 
-  if (loading && !drivers) { return <div className="flex justify-center items-center h-screen"><Loader className="animate-spin text-blue-500" /></div>; }
+  if (loading) { return <div className="flex justify-center items-center h-screen"><Loader className="animate-spin text-blue-500" /></div>; }
   
   return (
     <div className="space-y-6 p-4 md:p-6" dir="rtl">
@@ -251,7 +240,7 @@ export default function TransportCosts() {
               {days.map((day, index) => {
                   const dayOfWeek = day.getUTCDay();
                   const isFriday = dayOfWeek === 5;
-                  const isHoliday = (publicHolidays || []).some(h => h.date === toYMDString(day));
+                  const isHoliday = publicHolidays.some(h => h.date === toYMDString(day));
                   let headerClass = "border px-2 py-1 whitespace-nowrap text-center";
                   if (isFriday) headerClass += " bg-gray-200";
                   if (isHoliday) headerClass += " bg-yellow-200";
@@ -295,9 +284,9 @@ export default function TransportCosts() {
         <FinancialsModal
           driver={managingDriver}
           periodKey={periodKey}
-          existingFinancials={financials || []}
+          existingFinancials={financials.filter(f => f.driver_id === managingDriver.id)}
           onClose={() => setManagingDriver(null)}
-          onSaveSuccess={async () => { await syncTransportData(periodKey, dayStrings); }}
+          onSaveSuccess={fetchData}
         />
       )}
     </div>
