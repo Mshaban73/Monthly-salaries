@@ -1,4 +1,4 @@
-// --- START OF FILE src/pages/AttendanceSummary.tsx (النهائي مع منطق الشهر الصحيح) ---
+// --- START OF FILE src/pages/AttendanceSummary.tsx (كامل ومع الأنواع الصحيحة) ---
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext.tsx';
 import { supabase } from '../supabaseClient.js';
 import { getPayrollDays, getYearsList, getMonthsList, toYMDString } from '../utils/attendanceCalculator.ts';
 import { calculateAttendanceSummary, calculateLocationSummary } from '../utils/fullAttendanceCalculator.ts';
+import type { Employee, PublicHoliday, AttendanceRecord } from '../types.ts';
 
 const months = getMonthsList();
 const years = getYearsList();
@@ -22,14 +23,37 @@ const getInitialPeriod = () => {
     return { month: today.getMonth() + 1, year: today.getFullYear() };
 };
 
-const LocationDistribution = ({ summary }: { summary: any }) => { const entries = Object.entries(summary); if (entries.length === 0) { return <span className="text-gray-400">-</span>; } return (<div className="flex flex-col items-start text-xs space-y-1">{entries.map(([location, days]: [string, any]) => (<div key={location} className="flex items-center gap-2 bg-gray-100 px-2 py-1 rounded"><MapPin size={12} className="text-gray-500" /><span className="font-semibold text-gray-800">{location}:</span><span className="text-blue-600 font-bold">{days.toFixed(1)} يوم</span></div>))}</div>); };
-const formatOvertimeCell = (overtime: { rawHours: number, calculatedValue: number }) => { if (overtime.rawHours === 0) { return <span className="text-gray-400">-</span>; } return (<div className="flex flex-col items-center"><span className="font-bold text-lg">{overtime.calculatedValue.toFixed(2)}</span><span className="text-xs text-gray-500">({overtime.rawHours.toFixed(1)} س)</span></div>); };
+const LocationDistribution = ({ summary }: { summary: { [key: string]: number } }) => { 
+    const entries = Object.entries(summary); 
+    if (entries.length === 0) { return <span className="text-gray-400">-</span>; } 
+    return (
+        <div className="flex flex-col items-start text-xs space-y-1">
+            {entries.map(([location, days]: [string, number]) => (
+                <div key={location} className="flex items-center gap-2 bg-gray-100 px-2 py-1 rounded">
+                    <MapPin size={12} className="text-gray-500" />
+                    <span className="font-semibold text-gray-800">{location}:</span>
+                    <span className="text-blue-600 font-bold">{days.toFixed(1)} يوم</span>
+                </div>
+            ))}
+        </div>
+    ); 
+};
+
+const formatOvertimeCell = (overtime: { rawHours: number, calculatedValue: number }) => { 
+    if (overtime.rawHours === 0) { return <span className="text-gray-400">-</span>; } 
+    return (
+        <div className="flex flex-col items-center">
+            <span className="font-bold text-lg">{overtime.calculatedValue.toFixed(2)}</span>
+            <span className="text-xs text-gray-500">({overtime.rawHours.toFixed(1)} س)</span>
+        </div>
+    ); 
+};
 
 export default function AttendanceSummary() {
     const { can } = useAuth();
-    const [employees, setEmployees] = useState<any[]>([]);
-    const [attendanceRecords, setAttendanceRecords] = useState<any>({});
-    const [publicHolidays, setPublicHolidays] = useState<any[]>([]);
+    const [employees, setEmployees] = useState<Employee[]>([]);
+    const [attendanceRecords, setAttendanceRecords] = useState<{ [date: string]: { [empId: number]: { hours: number, location: string } } }>({});
+    const [publicHolidays, setPublicHolidays] = useState<PublicHoliday[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedPeriod, setSelectedPeriod] = useState(getInitialPeriod);
     const [searchTerm, setSearchTerm] = useState('');
@@ -50,23 +74,23 @@ export default function AttendanceSummary() {
             if (employeesRes.error || attendanceRes.error || holidaysRes.error) { console.error("Error fetching data:", employeesRes.error || attendanceRes.error || holidaysRes.error); alert('فشل في جلب البيانات.'); } 
             else {
                 setEmployees(employeesRes.data || []);
-                const recordsByDate = (attendanceRes.data || []).reduce((acc, record) => {
+                const recordsByDate = (attendanceRes.data || []).reduce((acc, record: AttendanceRecord) => {
                   const date = record.date;
                   if (!acc[date]) acc[date] = {};
                   acc[date][record.employee_id] = { hours: record.hours, location: record.location };
                   return acc;
-                }, {});
+                }, {} as { [date: string]: { [empId: number]: { hours: number, location: string } } });
                 setAttendanceRecords(recordsByDate);
                 setPublicHolidays(holidaysRes.data || []);
             }
             setLoading(false);
         };
         fetchData();
-    }, [payrollDays]);
+    }, [payrollDays, can]);
 
     const employeesSummary = useMemo(() => {
-        const filtered = employees.filter(emp => emp.name.toLowerCase().includes(searchTerm.toLowerCase()));
-        return filtered.map(employee => ({
+        const filtered = employees.filter((emp: Employee) => emp.name.toLowerCase().includes(searchTerm.toLowerCase()));
+        return filtered.map((employee: Employee) => ({
             ...employee,
             summary: calculateAttendanceSummary(employee, attendanceRecords, publicHolidays, payrollDays),
             locationSummary: calculateLocationSummary(employee, attendanceRecords, payrollDays)
@@ -87,9 +111,9 @@ export default function AttendanceSummary() {
             
             <div className="bg-white p-4 md:p-6 rounded-lg shadow-md mb-6">
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                     <div><label className="text-sm font-medium text-gray-700">الشهر</label><select value={selectedPeriod.month} onChange={e => setSelectedPeriod({...selectedPeriod, month: Number(e.target.value)})} className="w-full mt-1 bg-gray-50 px-3 py-2 border border-gray-300 rounded-md">{months.map(m => <option key={m.value} value={m.value}>{m.name}</option>)}</select></div>
-                     <div><label className="text-sm font-medium text-gray-700">السنة</label><select value={selectedPeriod.year} onChange={e => setSelectedPeriod({...selectedPeriod, year: Number(e.target.value)})} className="w-full mt-1 bg-gray-50 px-3 py-2 border border-gray-300 rounded-md">{years.map(y => <option key={y} value={y}>{y}</option>)}</select></div>
-                     <div className="relative"><label className="text-sm font-medium text-gray-700">بحث بالاسم</label><Search className="absolute right-3 top-[43px] -translate-y-1/2 text-gray-400" size={20} /><input type="text" placeholder="اكتب اسم الموظف..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full mt-1 bg-gray-50 px-3 py-2 pr-10 border border-gray-300 rounded-md"/></div>
+                     <div><label className="text-sm font-medium text-gray-700">الشهر</label><select value={selectedPeriod.month} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedPeriod({...selectedPeriod, month: Number(e.target.value)})} className="w-full mt-1 bg-gray-50 px-3 py-2 border border-gray-300 rounded-md">{months.map(m => <option key={m.value} value={m.value}>{m.name}</option>)}</select></div>
+                     <div><label className="text-sm font-medium text-gray-700">السنة</label><select value={selectedPeriod.year} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedPeriod({...selectedPeriod, year: Number(e.target.value)})} className="w-full mt-1 bg-gray-50 px-3 py-2 border border-gray-300 rounded-md">{years.map(y => <option key={y} value={y}>{y}</option>)}</select></div>
+                     <div className="relative"><label className="text-sm font-medium text-gray-700">بحث بالاسم</label><Search className="absolute right-3 top-[43px] -translate-y-1/2 text-gray-400" size={20} /><input type="text" placeholder="اكتب اسم الموظف..." value={searchTerm} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)} className="w-full mt-1 bg-gray-50 px-3 py-2 pr-10 border border-gray-300 rounded-md"/></div>
                  </div>
             </div>
 
@@ -109,7 +133,7 @@ export default function AttendanceSummary() {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                         {employeesSummary.length > 0 ? (
-                            employeesSummary.map(emp => (
+                            employeesSummary.map((emp: any) => (
                                 <tr key={emp.id} className="hover:bg-gray-50">
                                     <td className="px-4 py-4 whitespace-nowrap"><Link to={`/attendance/${emp.id}`} className="font-medium text-blue-600 hover:text-blue-800 hover:underline">{emp.name}</Link></td>
                                     <td className="px-4 py-4 text-center font-semibold">{emp.summary.actualAttendanceDays}</td>

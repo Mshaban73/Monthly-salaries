@@ -1,15 +1,16 @@
-// --- START OF FILE src/pages/History.tsx (كامل ونهائي لـ Supabase) ---
+// --- START OF FILE src/pages/History.tsx (كامل ومع الأنواع الصحيحة) ---
 
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient.js';
 import { useAuth } from '../context/AuthContext.tsx';
 import { History as HistoryIcon, Eye, RotateCcw, Loader } from 'lucide-react';
+import type { HistoricalPayroll } from '../types.ts';
 
 export default function History() {
   const { can } = useAuth();
   const navigate = useNavigate();
-  const [historicalPayrolls, setHistoricalPayrolls] = useState<any[]>([]);
+  const [historicalPayrolls, setHistoricalPayrolls] = useState<Pick<HistoricalPayroll, 'period'>[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -21,7 +22,7 @@ export default function History() {
       setLoading(true);
       const { data, error } = await supabase
         .from('historical_payrolls')
-        .select('period') // نجلب فقط الأعمدة التي نحتاجها للعرض
+        .select('period')
         .order('period', { ascending: false });
 
       if (error) {
@@ -54,7 +55,7 @@ export default function History() {
     }
   };
 
-  if (loading) { return <div className="flex justify-center items-center h-64"><Loader className="animate-spin" /></div>; }
+  if (loading) { return <div className="flex justify-center items-center h-64"><Loader className="animate-spin text-blue-500" /></div>; }
   if (!can('view', 'History')) { return <div className="p-6">ليس لديك صلاحية لعرض هذه الصفحة.</div>; }
 
   return (
@@ -85,7 +86,7 @@ export default function History() {
                       <Eye size={18} className="ml-2" />
                       عرض التقرير
                     </Link>
-                    {can('edit', 'History') && ( // أو صلاحية أخرى مناسبة
+                    {can('edit', 'History') && (
                       <button
                         onClick={() => handleReopen(period)}
                         className="flex items-center justify-center w-full bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition"

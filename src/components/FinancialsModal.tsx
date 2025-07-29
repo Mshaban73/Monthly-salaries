@@ -1,10 +1,18 @@
-// --- START OF FILE src/components/FinancialsModal.tsx (جديد لـ Supabase) ---
+// --- START OF FILE src/components/FinancialsModal.tsx (كامل ومع الأنواع الصحيحة) ---
 
 import React, { useState } from 'react';
 import { X, PlusCircle, Trash2, Save } from 'lucide-react';
 import { supabase } from '../supabaseClient.js';
+import type { Driver } from '../types.ts';
 
-interface FinancialItem { id?: number; amount: number; note: string; }
+interface FinancialItem { 
+    id?: number; 
+    amount: number; 
+    note: string; 
+    type?: 'extra' | 'deduction';
+    driver_id?: number;
+    period?: string;
+}
 
 // --- FinancialSection Component ---
 interface FinancialSectionProps {
@@ -20,11 +28,11 @@ function FinancialSection({ title, items, setItems, color }: FinancialSectionPro
     const handleAddItem = () => {
         if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) { alert('الرجاء إدخال مبلغ صحيح.'); return; }
         const newItem: FinancialItem = { id: Date.now(), amount: Number(amount), note }; // Temporary ID
-        setItems(prev => [...prev, newItem]);
+        setItems((prev: FinancialItem[]) => [...prev, newItem]);
         setAmount(''); setNote('');
     };
     
-    const handleDeleteItem = (id: number) => { setItems(prev => prev.filter(item => item.id !== id)); };
+    const handleDeleteItem = (id: number) => { setItems((prev: FinancialItem[]) => prev.filter(item => item.id !== id)); };
     const total = items.reduce((sum, item) => sum + item.amount, 0);
 
     return (
@@ -52,9 +60,9 @@ function FinancialSection({ title, items, setItems, color }: FinancialSectionPro
 
 // --- Main Modal Component ---
 interface FinancialsModalProps {
-    driver: any;
+    driver: Driver;
     periodKey: string;
-    existingFinancials: any[];
+    existingFinancials: FinancialItem[];
     onClose: () => void;
     onSaveSuccess: () => void;
 }
@@ -63,7 +71,6 @@ export default function FinancialsModal({ driver, periodKey, existingFinancials,
     const [deductions, setDeductions] = useState<FinancialItem[]>(existingFinancials.filter(f => f.type === 'deduction'));
 
     const handleSave = async () => {
-        // First, delete all old financials for this driver in this period
         const { error: deleteError } = await supabase.from('transport_financials')
             .delete()
             .eq('driver_id', driver.id)
@@ -75,7 +82,6 @@ export default function FinancialsModal({ driver, periodKey, existingFinancials,
             return;
         }
 
-        // Then, insert the new ones
         const extrasToInsert = extras.map(e => ({ driver_id: driver.id, period: periodKey, type: 'extra', amount: e.amount, note: e.note }));
         const deductionsToInsert = deductions.map(d => ({ driver_id: driver.id, period: periodKey, type: 'deduction', amount: d.amount, note: d.note }));
         const allItemsToInsert = [...extrasToInsert, ...deductionsToInsert];

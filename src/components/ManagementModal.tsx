@@ -1,10 +1,21 @@
+// --- START OF FILE src/components/ManagementModal.tsx (كامل ومع الأنواع الصحيحة) ---
+
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { supabase } from '../supabaseClient.js';
+import type { Employee, BonusDeduction } from '../types.ts';
 
-export default function ManagementModal({ employee, periodKey, existingRecord, onClose, onSaveSuccess }) {
-    const [bonus, setBonus] = useState(existingRecord?.bonus_amount || '0');
-    const [deduction, setDeduction] = useState(existingRecord?.deduction_amount || '0');
+interface ManagementModalProps {
+    employee: Employee;
+    periodKey: string;
+    existingRecord?: BonusDeduction;
+    onClose: () => void;
+    onSaveSuccess: (record: BonusDeduction) => void;
+}
+
+export default function ManagementModal({ employee, periodKey, existingRecord, onClose, onSaveSuccess }: ManagementModalProps) {
+    const [bonus, setBonus] = useState<string>((existingRecord?.bonus_amount || 0).toString());
+    const [deduction, setDeduction] = useState<string>((existingRecord?.deduction_amount || 0).toString());
 
     const handleSave = async () => {
         const recordToUpsert = {
@@ -41,11 +52,11 @@ export default function ManagementModal({ employee, periodKey, existingRecord, o
                 <div className="space-y-6">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">المكافآت (مبلغ)</label>
-                        <input type="number" value={bonus} onChange={(e) => setBonus(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+                        <input type="number" value={bonus} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setBonus(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">الخصومات (مبلغ)</label>
-                        <input type="number" value={deduction} onChange={(e) => setDeduction(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+                        <input type="number" value={deduction} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDeduction(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
                     </div>
                 </div>
                 <div className="mt-8 flex justify-end gap-4">

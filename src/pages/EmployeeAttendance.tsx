@@ -1,10 +1,11 @@
-// --- START OF FILE src/pages/EmployeeAttendance.tsx (النهائي بالكامل مع قائمة المواقع) ---
+// --- START OF FILE src/pages/EmployeeAttendance.tsx (كامل ومع الأنواع الصحيحة) ---
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Save, ChevronLeft, Loader, Zap } from 'lucide-react';
 import { supabase } from '../supabaseClient.js';
 import { getPayrollDays, getYearsList, getMonthsList, toYMDString } from '../utils/attendanceCalculator.ts';
+import type { Employee, PublicHoliday } from '../types.ts';
 
 const dayNameToIndex: { [key: string]: number } = { 'الأحد': 0, 'الإثنين': 1, 'الثلاثاء': 2, 'الأربعاء': 3, 'الخميس': 4, 'الجمعة': 5, 'السبت': 6 };
 const months = getMonthsList();
@@ -15,10 +16,7 @@ const getInitialPeriod = () => {
     const currentDay = today.getDate();
     if (currentDay >= 26) {
         const nextPeriod = new Date(today.setMonth(today.getMonth() + 1));
-        return {
-            month: nextPeriod.getMonth() + 1,
-            year: nextPeriod.getFullYear()
-        };
+        return { month: nextPeriod.getMonth() + 1, year: nextPeriod.getFullYear() };
     }
     return { month: today.getMonth() + 1, year: today.getFullYear() };
 };
@@ -31,8 +29,8 @@ interface DailyAttendanceState { [date: string]: DailyRecord; }
 
 export default function EmployeeAttendance() {
     const { employeeId } = useParams<{ employeeId: string }>();
-    const [employee, setEmployee] = useState<any>(null);
-    const [publicHolidays, setPublicHolidays] = useState<{date: string, name: string}[]>([]);
+    const [employee, setEmployee] = useState<Employee | null>(null);
+    const [publicHolidays, setPublicHolidays] = useState<PublicHoliday[]>([]);
     const [attendance, setAttendance] = useState<DailyAttendanceState>({});
     const [loading, setLoading] = useState(true);
     const [allLocations, setAllLocations] = useState<string[]>([]);
@@ -62,7 +60,7 @@ export default function EmployeeAttendance() {
         ]);
         
         setPublicHolidays(holRes.data || []);
-        const uniqueLocations = [...new Set((locRes.data || []).map(e => e.work_location))].filter(Boolean);
+        const uniqueLocations = [...new Set((locRes.data || []).map((e: { work_location: string }) => e.work_location))].filter(Boolean);
         setAllLocations(uniqueLocations);
         
         const dailyData: DailyAttendanceState = {};
@@ -83,7 +81,7 @@ export default function EmployeeAttendance() {
     }, [fetchData]);
 
     const handleDataChange = (date: string, field: 'hours' | 'location', value: string) => {
-        setAttendance(prev => ({ ...prev, [date]: { ...prev[date], [field]: value } }));
+        setAttendance((prev: DailyAttendanceState) => ({ ...prev, [date]: { ...prev[date], [field]: value } }));
     };
 
     const handleSave = async () => {
@@ -165,7 +163,7 @@ export default function EmployeeAttendance() {
                 </div>
             </div>
 
-            <div className="bg-white p-6 rounded-lg shadow-md mb-6"><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><select value={selectedPeriod.month} onChange={e => setSelectedPeriod({...selectedPeriod, month: Number(e.target.value)})} className="w-full bg-gray-50 px-3 py-2 border rounded-md">{months.map(m => <option key={m.value} value={m.value}>{m.name}</option>)}</select><select value={selectedPeriod.year} onChange={e => setSelectedPeriod({...selectedPeriod, year: Number(e.target.value)})} className="w-full bg-gray-50 px-3 py-2 border rounded-md">{years.map(y => <option key={y} value={y}>{y}</option>)}</select></div></div>
+            <div className="bg-white p-6 rounded-lg shadow-md mb-6"><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><select value={selectedPeriod.month} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedPeriod({...selectedPeriod, month: Number(e.target.value)})} className="w-full bg-gray-50 px-3 py-2 border rounded-md">{months.map(m => <option key={m.value} value={m.value}>{m.name}</option>)}</select><select value={selectedPeriod.year} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedPeriod({...selectedPeriod, year: Number(e.target.value)})} className="w-full bg-gray-50 px-3 py-2 border rounded-md">{years.map(y => <option key={y} value={y}>{y}</option>)}</select></div></div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
                 {payrollDays.map(day => {
@@ -186,9 +184,9 @@ export default function EmployeeAttendance() {
                             {holiday && <p className="text-xs text-center text-yellow-800 font-semibold mt-1" title={holiday.name}>{holiday.name}</p>}
                             
                             <div className="mt-3 space-y-2">
-                                <input type="number" value={dayData.hours} onChange={e => handleDataChange(dateStr, 'hours', e.target.value)} placeholder="ساعات" className="block w-full text-center p-1 border rounded text-lg font-bold !text-blue-700 bg-white"/>
+                                <input type="number" value={dayData.hours} onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleDataChange(dateStr, 'hours', e.target.value)} placeholder="ساعات" className="block w-full text-center p-1 border rounded text-lg font-bold !text-blue-700 bg-white"/>
                                 {!employee.is_head_office && (
-                                    <select value={dayData.location} onChange={e => handleDataChange(dateStr, 'location', e.target.value)} className="p-1 border rounded w-full text-sm text-center">
+                                    <select value={dayData.location} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleDataChange(dateStr, 'location', e.target.value)} className="p-1 border rounded w-full text-sm text-center">
                                         <option value={employee.work_location}>{employee.work_location} (افتراضي)</option>
                                         {allLocations.map(loc => loc !== employee.work_location && <option key={loc} value={loc}>{loc}</option>)}
                                     </select>

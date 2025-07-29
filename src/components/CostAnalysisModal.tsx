@@ -12,8 +12,8 @@ export default function CostAnalysisModal({ employees, attendanceRecords, public
     const excludedEmployees = new Set(payrollSettings?.excluded_employee_ids || []);
     const generalBonusDays = payrollSettings?.general_bonus_days || 0;
     
-    employees.forEach(emp => {
-      const empPayrollData = payrollData.find(pd => pd.employee.id === emp.id);
+    employees.forEach((emp: any) => {
+      const empPayrollData = payrollData.find((pd: any) => pd.employee.id === emp.id);
       if (!empPayrollData) return;
 
       const distribution = calculateCostDistribution(
@@ -47,7 +47,25 @@ export default function CostAnalysisModal({ employees, attendanceRecords, public
     }, { baseCost: 0, allowancesCost: 0, otherAdditions: 0, totalDeductions: 0, netCost: 0 });
   }, [analysisData]);
   
-  const handleExportAnalysis = () => { /* ... (منطق التصدير يمكن إضافته هنا) ... */ };
+  const handleExportAnalysis = () => {
+    const dataForExport: (string | number)[][] = [['الموظف', 'صافي الراتب', 'الموقع', 'أيام', 'تكلفة الأساسي', 'تكلفة البدلات', 'تكلفة إضافي ومنح', 'تكلفة الخصومات', 'صافي تكلفة الموقع']];
+    Object.entries(analysisData).forEach(([empName, { distribution, netSalary }]: [string, any]) => {
+      Object.entries(distribution).forEach(([locationName, details]: [string, any], index: number) => {
+        dataForExport.push([
+            index === 0 ? empName : '',
+            index === 0 ? netSalary.toFixed(2) : '',
+            locationName, details.days.toFixed(1), details.baseCost.toFixed(2),
+            details.allowancesCost.toFixed(2), details.otherAdditions.toFixed(2),
+            details.totalDeductions.toFixed(2), details.netCost.toFixed(2)
+        ]);
+      });
+    });
+    dataForExport.push(['الإجمالي', '', '', '', grandTotals.baseCost.toFixed(2), grandTotals.allowancesCost.toFixed(2), grandTotals.otherAdditions.toFixed(2), grandTotals.totalDeductions.toFixed(2), grandTotals.netCost.toFixed(2)]);
+    const ws = XLSX.utils.aoa_to_sheet(dataForExport);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "تحليل التكاليف");
+    XLSX.writeFile(wb, `CostAnalysis_${periodKey}.xlsx`);
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
@@ -78,12 +96,12 @@ export default function CostAnalysisModal({ employees, attendanceRecords, public
               {Object.keys(analysisData).length === 0 && (
                 <tr><td colSpan={9} className="text-center p-8 text-gray-500">لا توجد بيانات لعرضها.</td></tr>
               )}
-              {Object.entries(analysisData).map(([empName, { distribution, netSalary }]) => {
+              {Object.entries(analysisData).map(([empName, { distribution, netSalary }]: [string, any]) => {
                 const distributionEntries = Object.entries(distribution);
                 if (distributionEntries.length === 0) return null;
                 return (
                   <React.Fragment key={empName}>
-                    {distributionEntries.map(([locationName, details]: [string, any], index) => (
+                    {distributionEntries.map(([locationName, details]: [string, any], index: number) => (
                       <tr key={`${empName}-${locationName}`} className="hover:bg-gray-50 border-b">
                         {index === 0 && <td className="border-l p-2 font-semibold align-middle" rowSpan={distributionEntries.length}>{empName}</td>}
                         {index === 0 && <td className="border-l p-2 text-center font-bold text-green-800 bg-green-50 align-middle" rowSpan={distributionEntries.length}>{netSalary.toFixed(2)}</td>}

@@ -1,8 +1,9 @@
-// src/context/AuthContext.tsx
+// --- START OF FILE src/context/AuthContext.tsx (كامل ومع الأنواع الصحيحة) ---
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { supabase } from '../supabaseClient';
+import { supabase } from '../supabaseClient.js';
 import type { Session, User } from '@supabase/supabase-js';
+import type { Permission } from '../types.ts';
 
 interface AuthContextType {
   session: Session | null;
@@ -25,7 +26,7 @@ export const useAuth = () => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
-  const [permissions, setPermissions] = useState<any[]>([]);
+  const [permissions, setPermissions] = useState<Permission[]>([]);
   const [loading, setLoading] = useState(true);
 
   const managerEmail = 'info@thinksolutioneg.com';
@@ -43,11 +44,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const email = session.user.email;
 
-    // المدير له كل الصلاحيات دائمًا
     if (email === managerEmail) {
-      const { data: allPages } = await supabase.from('pages').select('name');
-      const managerPermissions = (allPages || []).map((p) => ({
-        pages: { name: p.name },
+      const { data: allPages } = await supabase.from('pages').select('id, name');
+      const managerPermissions: Permission[] = (allPages || []).map((p: { id: number; name: string }) => ({
+        profile_id: session.user!.id,
+        page_id: p.id,
+        pages: { id: p.id, name: p.name },
         can_view: true,
         can_add: true,
         can_edit: true,
@@ -57,38 +59,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false);
       return;
     }
-
-    // الحصول على id من جدول profiles
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('email', email)
-      .single();
-
-    if (profileError || !profile?.id) {
-      console.error('❌ لم يتم العثور على ملف المستخدم في جدول profiles');
-      setPermissions([]);
-      setLoading(false);
-      return;
-    }
-
-    // تحميل الصلاحيات من جدول permissions
+    
     const { data: userPermissions, error } = await supabase
       .from('permissions')
       .select(`
+        profile_id,
+        page_id,
         can_view,
         can_add,
         can_edit,
         can_delete,
-        pages ( name )
+        pages ( id, name )
       `)
-      .eq('profile_id', profile.id);
+      .eq('profile_id', session.user.id);
 
     if (error) {
-      console.error('❌ فشل تحميل الصلاحيات:', error.message);
+      console.error('Error fetching permissions:', error.message);
       setPermissions([]);
     } else {
-      setPermissions(userPermissions || []);
+      setPermissions(userPermissions as Permission[] || []);
     }
 
     setLoading(false);
@@ -97,7 +86,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     fetchSessionAndPermissions();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(() => {
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event: string, session: Session | null) => {
       fetchSessionAndPermissions();
     });
 
@@ -118,7 +107,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const can = useCallback(
     (action: 'view' | 'add' | 'edit' | 'delete', pageName: string): boolean => {
-      const perm = permissions.find((p) => p.pages?.name === pageName);
+      const perm = permissions.find((p: Permission) => p.pages?.name === pageName);
       if (!perm) return false;
       switch (action) {
         case 'view': return perm.can_view;

@@ -1,12 +1,20 @@
-// --- START OF FILE src/components/LoanManagementModal.tsx (مع إصلاح تاريخ النهاية) ---
+// --- START OF FILE src/components/LoanManagementModal.tsx (كامل ومع الأنواع الصحيحة) ---
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { X, Edit, Trash2 } from 'lucide-react';
 import { supabase } from '../supabaseClient.js';
+import type { Employee, Loan } from '../types.ts';
 
 const initialLoanFormState = { employee_id: '', total_amount: '', installments: '', start_date: '', description: '' };
 
-export default function LoanManagementModal({ employees, loans, setLoans, onClose }) {
+interface LoanModalProps {
+    employees: Employee[];
+    loans: Loan[];
+    setLoans: React.Dispatch<React.SetStateAction<Loan[]>>;
+    onClose: () => void;
+}
+
+export default function LoanManagementModal({ employees, loans, setLoans, onClose }: LoanModalProps) {
     const [loanData, setLoanData] = useState(initialLoanFormState);
     const [editingLoanId, setEditingLoanId] = useState<number | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
@@ -30,7 +38,7 @@ export default function LoanManagementModal({ employees, loans, setLoans, onClos
         setIsDropdownVisible(true);
     };
 
-    const handleSelectEmployee = (employee: any) => {
+    const handleSelectEmployee = (employee: Employee) => {
         setLoanData(prev => ({ ...prev, employee_id: employee.id.toString() }));
         setSearchQuery(employee.name);
         setIsDropdownVisible(false);
@@ -40,7 +48,7 @@ export default function LoanManagementModal({ employees, loans, setLoans, onClos
         setLoanData(prev => ({ ...prev, [e.target.name]: e.target.value }));
     };
 
-    const handleEditClick = (loan: any) => {
+    const handleEditClick = (loan: Loan) => {
         setEditingLoanId(loan.id);
         setLoanData({
             employee_id: loan.employee_id.toString(),
@@ -72,11 +80,11 @@ export default function LoanManagementModal({ employees, loans, setLoans, onClos
         if (editingLoanId) {
             const { data, error } = await supabase.from('loans').update(payload).eq('id', editingLoanId).select().single();
             if (error) { alert('فشل تحديث السلفة'); console.error(error); } 
-            else { setLoans(prev => prev.map(l => l.id === editingLoanId ? data : l)); }
+            else { setLoans((prev: Loan[]) => prev.map(l => l.id === editingLoanId ? data : l)); }
         } else {
             const { data, error } = await supabase.from('loans').insert(payload).select().single();
             if (error) { alert('فشل إضافة السلفة'); console.error(error); } 
-            else { setLoans(prev => [...prev, data].sort((a,b) => a.start_date.localeCompare(b.start_date))); }
+            else { setLoans((prev: Loan[]) => [...prev, data].sort((a,b) => a.start_date.localeCompare(b.start_date))); }
         }
         handleCancelEdit();
     };
@@ -85,18 +93,16 @@ export default function LoanManagementModal({ employees, loans, setLoans, onClos
         if (window.confirm('هل أنت متأكد؟')) {
             const { error } = await supabase.from('loans').delete().eq('id', loanId);
             if (error) { alert('فشل حذف السلفة'); } 
-            else { setLoans(prev => prev.filter(l => l.id !== loanId)); }
+            else { setLoans((prev: Loan[]) => prev.filter(l => l.id !== loanId)); }
         }
     };
 
-    // ▼▼▼ هذا هو الإصلاح لمنطق تاريخ النهاية ▼▼▼
     const getEndDate = (start: string, months: number): string => {
         if (!start || !months) return '-';
         const [year, month] = start.split('-').map(Number);
-        const endDate = new Date(year, month - 1 + months - 1); // نطرح 1 لأن الشهور تبدأ من 0
+        const endDate = new Date(year, month - 1 + months - 1);
         return `${endDate.getFullYear()}-${(endDate.getMonth() + 1).toString().padStart(2, '0')}`;
     };
-    // ▲▲▲ نهاية الإصلاح ▲▲▲
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4" onClick={handleCancelEdit}>
@@ -109,7 +115,7 @@ export default function LoanManagementModal({ employees, loans, setLoans, onClos
                                 <label className="block text-sm font-medium">الموظف</label>
                                 <input type="text" value={searchQuery} onChange={handleSearchChange} onFocus={() => setIsDropdownVisible(true)} placeholder="ابحث عن اسم الموظف..." autoComplete="off" className="w-full px-3 py-2 border rounded-md" />
                                 {isDropdownVisible && searchResults.length > 0 && (
-                                    <div className="absolute z-20 w-full bg-white border rounded-md mt-1 max-h-48 overflow-y-auto shadow-lg">{searchResults.map(emp => (<div key={emp.id} onClick={() => handleSelectEmployee(emp)} className="px-3 py-2 hover:bg-gray-100 cursor-pointer">{emp.name}</div>))}</div>
+                                    <div className="absolute z-20 w-full bg-white border rounded-md mt-1 max-h-48 overflow-y-auto shadow-lg">{searchResults.map((emp: Employee) => (<div key={emp.id} onClick={() => handleSelectEmployee(emp)} className="px-3 py-2 hover:bg-gray-100 cursor-pointer">{emp.name}</div>))}</div>
                                 )}
                             </div>
                             <div><label>إجمالي مبلغ السلفة</label><input name="total_amount" type="number" value={loanData.total_amount} onChange={handleInputChange} required className="w-full px-3 py-2 border rounded-md"/></div>
@@ -126,7 +132,7 @@ export default function LoanManagementModal({ employees, loans, setLoans, onClos
                         <div className="flex-1 overflow-y-auto border rounded-md">
                             <table className="w-full text-sm"><thead className="bg-gray-100 sticky top-0 z-10"><tr><th className="p-2 text-right">الموظف</th><th className="p-2">المبلغ</th><th className="p-2">القسط</th><th className="p-2">البداية</th><th className="p-2">النهاية</th><th className="p-2">إجراءات</th></tr></thead>
                                 <tbody>
-                                    {loans.map(loan => { const empName = employees.find(e => e.id === loan.employee_id)?.name || 'غير معروف'; return (
+                                    {loans.map((loan: Loan) => { const empName = employees.find(e => e.id === loan.employee_id)?.name || 'غير معروف'; return (
                                         <tr key={loan.id} className="border-b hover:bg-gray-50">
                                             <td className="p-2 font-medium">{empName}</td><td className="p-2 text-center">{loan.total_amount.toLocaleString()}</td>
                                             <td className="p-2 text-center">{(loan.total_amount / loan.installments).toFixed(2)}</td>

@@ -1,4 +1,4 @@
-// --- START OF FILE src/pages/Payroll.tsx (كامل ونهائي مع تعديل بيانات التقرير) ---
+// --- START OF FILE src/pages/Payroll.tsx (النهائي بالكامل - بدون ميزة الفلتر الإضافية) ---
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -26,11 +26,11 @@ const getInitialPeriod = () => {
     return { month: today.getMonth() + 1, year: today.getFullYear() };
 };
 
-function StatCard({ title, value, icon, colorClass }) { 
+function StatCard({ title, value, icon, colorClass }: { title: string; value: string; icon: React.ReactNode; colorClass: string; }) { 
     return (
         <div className="bg-white p-4 rounded-lg shadow-md flex items-center">
             <div className={`p-3 rounded-full bg-opacity-20 ${colorClass.replace('text-', 'bg-')}`}>
-                {React.cloneElement(icon, { className: `h-6 w-6 ${colorClass}` })}
+                {React.cloneElement(icon as React.ReactElement, { className: `h-6 w-6 ${colorClass}` })}
             </div>
             <div className="ml-4 mr-4">
                 <p className="text-sm font-medium text-gray-500">{title}</p>
@@ -44,7 +44,6 @@ export default function Payroll() {
   const { can } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-
   const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState<any[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<any>({});
@@ -103,7 +102,7 @@ export default function Payroll() {
     ]);
     
     setEmployees(empRes.data || []);
-    const recordsByDate = (attRes.data || []).reduce((acc, rec) => {
+    const recordsByDate = (attRes.data || []).reduce((acc: any, rec: any) => {
         if (!acc[rec.date]) { acc[rec.date] = {}; }
         if (!acc[rec.date][rec.employee_id]) { acc[rec.date][rec.employee_id] = { hours: 0, locations: [] }; }
         acc[rec.date][rec.employee_id].hours += rec.hours;
@@ -225,10 +224,10 @@ export default function Payroll() {
         <div><label htmlFor="filterSource">جهة الصرف</label><select id="filterSource" value={filterSource} onChange={(e) => setFilterSource(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 border-gray-300 rounded-md"><option value="all">الكل</option>{uniqueSources.map(src => <option key={src} value={src}>{src}</option>)}</select></div>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard title="إجمالي الرواتب" value={payrollTotals.grossSalary.toLocaleString('ar-EG', {minimumFractionDigits: 2})} icon={<DollarSign/>} colorClass="text-gray-600" />
-          <StatCard title="إجمالي الإضافات" value={payrollTotals.totalAdditions.toLocaleString('ar-EG', {minimumFractionDigits: 2})} icon={<PackagePlus/>} colorClass="text-yellow-600" />
-          <StatCard title="إجمالي الخصومات" value={payrollTotals.totalDeductions.toLocaleString('ar-EG', {minimumFractionDigits: 2})} icon={<PackageMinus/>} colorClass="text-red-600" />
-          <StatCard title="صافي الرواتب النهائية" value={payrollTotals.netSalary.toLocaleString('ar-EG', {minimumFractionDigits: 2})} icon={<DollarSign/>} colorClass="text-green-600" />
+          <StatCard title="إجمالي الرواتب (المعروض)" value={payrollTotals.grossSalary.toLocaleString('ar-EG', {minimumFractionDigits: 2})} icon={<DollarSign/>} colorClass="text-gray-600" />
+          <StatCard title="إجمالي الإضافات (المعروض)" value={payrollTotals.totalAdditions.toLocaleString('ar-EG', {minimumFractionDigits: 2})} icon={<PackagePlus/>} colorClass="text-yellow-600" />
+          <StatCard title="إجمالي الخصومات (المعروض)" value={payrollTotals.totalDeductions.toLocaleString('ar-EG', {minimumFractionDigits: 2})} icon={<PackageMinus/>} colorClass="text-red-600" />
+          <StatCard title="صافي الرواتب (المعروض)" value={payrollTotals.netSalary.toLocaleString('ar-EG', {minimumFractionDigits: 2})} icon={<DollarSign/>} colorClass="text-green-600" />
       </div>
       <div className="bg-white p-6 rounded-lg shadow-md">
           <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">

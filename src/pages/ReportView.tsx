@@ -1,4 +1,4 @@
-// --- START OF FILE src/pages/ReportView.tsx (الكامل والنهائي مع التصدير) ---
+// --- START OF FILE src/pages/ReportView.tsx (الكامل والنهائي مع التقرير التفصيلي) ---
 
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
@@ -6,12 +6,16 @@ import * as XLSX from 'xlsx';
 import { supabase } from '../supabaseClient.js';
 import { useAuth } from '../context/AuthContext.tsx';
 import { ChevronLeft, Loader, FileDown } from 'lucide-react';
+import PayrollDetailModal from '../components/PayrollDetailModal.tsx';
+import TransportDetailModal from '../components/TransportDetailModal.tsx';
 
 export default function ReportView() {
   const { can } = useAuth();
-  const { year, month } = useParams();
+  const { year, month } = useParams<{ year: string; month: string }>();
   const [reportData, setReportData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedPayrollItem, setSelectedPayrollItem] = useState<any | null>(null);
+  const [selectedTransportItem, setSelectedTransportItem] = useState<any | null>(null);
 
   useEffect(() => {
     const fetchReport = async () => {
@@ -36,7 +40,6 @@ export default function ReportView() {
       }
       setLoading(false);
     };
-
     fetchReport();
   }, [year, month, can]);
   
@@ -47,7 +50,7 @@ export default function ReportView() {
     const wb = XLSX.utils.book_new();
 
     if (payrollReport.length > 0) {
-      const payrollDataForExport = payrollReport.map(item => ({
+      const payrollDataForExport = payrollReport.map((item: any) => ({
         'الاسم': item.employee.name,
         'الموقع': item.employee.work_location,
         'جهة الصرف': item.employee.payment_source,
@@ -66,7 +69,7 @@ export default function ReportView() {
     }
 
     if (transportReport.length > 0) {
-      const transportDataForExport = transportReport.map(item => ({
+      const transportDataForExport = transportReport.map((item: any) => ({
         'اسم السائق': item.driver_name,
         'الموقع': item.work_location,
         'جهة الصرف': item.payment_source,
@@ -83,7 +86,7 @@ export default function ReportView() {
   };
 
   const payrollTotals = payrollReport.reduce(
-    (acc, curr) => {
+    (acc: any, curr: any) => {
       acc.basePay += curr.basePay;
       acc.totalOvertimePay += curr.totalOvertimePay;
       acc.totalAllowances += curr.totalAllowances || 0;
@@ -97,7 +100,7 @@ export default function ReportView() {
     { basePay: 0, totalOvertimePay: 0, totalAllowances: 0, totalBonuses: 0, generalBonus: 0, loanInstallment: 0, manualDeduction: 0, netSalary: 0 }
   );
   
-  const transportTotal = transportReport.reduce((sum, curr) => sum + curr.totalCost, 0);
+  const transportTotal = transportReport.reduce((sum: number, curr: any) => sum + curr.totalCost, 0);
 
   if (loading) { return <div className="flex justify-center items-center h-64"><Loader className="animate-spin" /></div>; }
   if (!reportData) { return ( <div className="text-center py-10" dir="rtl"><h2 className="text-2xl font-bold text-red-600">لم يتم العثور على التقرير</h2><Link to="/history" className="text-blue-500 hover:underline mt-4 inline-block">العودة للسجل</Link></div> ); }
@@ -139,8 +142,12 @@ export default function ReportView() {
             </thead>
             <tbody className="divide-y">
               {payrollReport.map((item: any, index: number) => (
-                <tr key={index} className="text-center">
-                  <td className="py-2 px-3 border font-medium">{item.employee.name}</td>
+                <tr key={index} className="text-center hover:bg-gray-50">
+                  <td className="py-2 px-3 border font-medium">
+                    <button onClick={() => setSelectedPayrollItem(item)} className="text-blue-600 hover:underline bg-transparent border-none p-0 cursor-pointer">
+                      {item.employee.name}
+                    </button>
+                  </td>
                   <td className="py-2 px-3 border">{item.employee.work_location}</td>
                   <td className="py-2 px-3 border">{item.employee.payment_source}</td>
                   <td className="py-2 px-3 border">{item.basePay?.toFixed(2)}</td>
@@ -188,8 +195,12 @@ export default function ReportView() {
                 </thead>
                 <tbody className="divide-y">
                     {transportReport.map((item: any, index: number) => (
-                        <tr key={index} className="text-center">
-                            <td className="py-2 px-3 border font-medium">{item.driver_name}</td>
+                        <tr key={index} className="text-center hover:bg-gray-50">
+                            <td className="py-2 px-3 border font-medium">
+                                <button onClick={() => setSelectedTransportItem(item)} className="text-blue-600 hover:underline bg-transparent border-none p-0 cursor-pointer">
+                                  {item.driver_name}
+                                </button>
+                            </td>
                             <td className="py-2 px-3 border">{item.work_location}</td>
                             <td className="py-2 px-3 border">{item.payment_source}</td>
                             <td className="py-2 px-3 border">{item.baseCost.toFixed(2)}</td>
@@ -202,15 +213,18 @@ export default function ReportView() {
                 <tfoot className="bg-gray-200 font-bold">
                     <tr className="text-center">
                         <td className="py-2 px-3 border" colSpan={3}>الإجمالي</td>
-                        <td className="py-2 px-3 border">{transportReport.reduce((s,i)=>s+i.baseCost,0).toFixed(2)}</td>
-                        <td className="py-2 px-3 border">{transportReport.reduce((s,i)=>s+i.extrasTotal,0).toFixed(2)}</td>
-                        <td className="py-2 px-3 border">{transportReport.reduce((s,i)=>s+i.deductionsTotal,0).toFixed(2)}</td>
+                        <td className="py-2 px-3 border">{transportReport.reduce((s: number, i: any) => s + i.baseCost, 0).toFixed(2)}</td>
+                        <td className="py-2 px-3 border">{transportReport.reduce((s: number, i: any) => s + i.extrasTotal, 0).toFixed(2)}</td>
+                        <td className="py-2 px-3 border">{transportReport.reduce((s: number, i: any) => s + i.deductionsTotal, 0).toFixed(2)}</td>
                         <td className="py-2 px-3 border text-blue-800">{transportTotal.toFixed(2)}</td>
                     </tr>
                 </tfoot>
             </table>
         </div>
       )}
+      
+      {selectedPayrollItem && (<PayrollDetailModal reportItem={selectedPayrollItem} onClose={() => setSelectedPayrollItem(null)} />)}
+      {selectedTransportItem && (<TransportDetailModal reportItem={selectedTransportItem} onClose={() => setSelectedTransportItem(null)} />)}
     </div>
   );
 }

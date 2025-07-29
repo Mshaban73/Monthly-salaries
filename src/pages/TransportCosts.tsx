@@ -56,7 +56,7 @@ export default function TransportCosts() {
     ]);
 
     setDrivers(driversRes.data || []);
-    const attByDriver = (attRes.data || []).reduce((acc, rec) => {
+    const attByDriver = (attRes.data || []).reduce((acc: any, rec: any) => {
       if (!acc[rec.driver_id]) acc[rec.driver_id] = {};
       acc[rec.driver_id][rec.date] = rec.trips;
       return acc;
@@ -81,10 +81,10 @@ export default function TransportCosts() {
     e.preventDefault();
     const form = e.target as HTMLFormElement;
     const driverData = { 
-        name: form.name.value, 
-        work_location: form.workLocation.value, 
-        payment_source: form.paymentSource.value, 
-        day_cost: Number(form.dayCost.value),
+        name: (form.elements.namedItem('name') as HTMLInputElement).value, 
+        work_location: (form.elements.namedItem('workLocation') as HTMLInputElement).value, 
+        payment_source: (form.elements.namedItem('paymentSource') as HTMLInputElement).value, 
+        day_cost: Number((form.elements.namedItem('dayCost') as HTMLInputElement).value),
         is_active: isDriverActive
     };
     if (editingDriver) {
@@ -142,12 +142,7 @@ export default function TransportCosts() {
           };
       });
       if (window.confirm(`هل أنت متأكد من حفظ وترحيل تكلفة النقل لشهر ${periodKey}؟`)) {
-          const { data: existing, error: fetchError } = await supabase.from('historical_payrolls').select('transport_cost_data').eq('period', periodKey).single();
-          if (fetchError && fetchError.code !== 'PGRST116') { // Ignore "no rows" error
-              alert('فشل التحقق من التقرير الحالي.'); return;
-          }
-          const payload = { period: periodKey, transport_cost_data: { report: reportData } };
-          const { error } = await supabase.from('historical_payrolls').upsert(payload, { onConflict: 'period' });
+          const { error } = await supabase.from('historical_payrolls').upsert({ period: periodKey, transport_cost_data: { report: reportData } }, { onConflict: 'period' });
           if (error) { alert('فشل حفظ التقرير.'); console.error(error); } 
           else { alert('تم حفظ وترحيل التقرير بنجاح!'); navigate('/history'); }
       }
