@@ -1,5 +1,3 @@
-// --- START OF FILE src/pages/TransportCosts.tsx (النهائي والمصحح بالكامل) ---
-
 import React, { useEffect, useState, useMemo } from "react";
 import * as XLSX from "xlsx";
 import { useNavigate } from 'react-router-dom';
@@ -8,15 +6,14 @@ import { supabase } from '../supabaseClient.js';
 import { getPayrollDays, getYearsList, getMonthsList, toYMDString } from '../utils/attendanceCalculator.ts';
 import FinancialsModal from '../components/FinancialsModal.tsx';
 import { Edit, Trash2, Save, DollarSign, Loader, FileDown, Search } from 'lucide-react';
-// --- بداية التعديل 1: استيراد النوع الصحيح ---
 import type { Driver, PublicHoliday, FinancialItem } from '../types.ts';
-// --- نهاية التعديل 1 ---
 
 const months = getMonthsList();
 const years = getYearsList();
 
 const getInitialPeriod = () => {
     const today = new Date();
+    // If it's the 26th or later, default to the next month's payroll
     if (today.getDate() >= 26) {
         today.setMonth(today.getMonth() + 1);
     }
@@ -35,9 +32,7 @@ export default function TransportCosts() {
   const [loading, setLoading] = useState(true);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [attendance, setAttendance] = useState<TransportAttendanceState>({});
-  // --- بداية التعديل 2: استخدام النوع الصحيح للحالة ---
   const [financials, setFinancials] = useState<FinancialItem[]>([]);
-  // --- نهاية التعديل 2 ---
   const [publicHolidays, setPublicHolidays] = useState<PublicHoliday[]>([]);
   
   const [selectedPeriod, setSelectedPeriod] = useState(getInitialPeriod);
@@ -88,33 +83,51 @@ export default function TransportCosts() {
     setIsDriverActive(true);
   };
 
+  // --- START OF CORRECTION ---
   const handleDriverSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const form = e.target as HTMLFormElement;
+
+    // **التصحيح الرئيسي هنا**
+    // أسماء المفاتيح (مثل work_location) يجب أن تطابق أسماء الأعمدة في قاعدة بيانات Supabase
     const driverData = { 
         name: (form.elements.namedItem('name') as HTMLInputElement).value, 
         work_location: (form.elements.namedItem('workLocation') as HTMLInputElement).value, 
         payment_source: (form.elements.namedItem('paymentSource') as HTMLInputElement).value, 
-        daily_rate: Number((form.elements.namedItem('dayCost') as HTMLInputElement).value), // <-- تصحيح اسم الحقل
+        daily_rate: Number((form.elements.namedItem('dayCost') as HTMLInputElement).value),
         is_active: isDriverActive
     };
+
     if (editingDriver) {
       const { error } = await supabase.from('drivers').update(driverData).eq('id', editingDriver.id);
-      if (error) alert("فشل تحديث السائق");
+      if (error) {
+        console.error("Supabase update error:", error);
+        alert("فشل تحديث بيانات السائق. تحقق من الـ Console لمزيد من التفاصيل.");
+      }
     } else {
+      // عند الإضافة، لا نرسل `is_active` من الحالة، بل نجعلها `true` دائماً
       const { error } = await supabase.from('drivers').insert({ ...driverData, is_active: true });
-      if (error) alert("فشل إضافة السائق");
+      if (error) {
+        console.error("Supabase insert error:", error);
+        alert("فشل إضافة السائق. تحقق من الـ Console لمزيد من التفاصيل.");
+      }
     }
+
     handleCancelEdit();
     form.reset();
-    fetchData();
+    fetchData(); // إعادة تحميل البيانات لإظهار التغييرات
   };
+  // --- END OF CORRECTION ---
 
   const deleteDriver = async (driverId: number) => {
-    if (window.confirm("هل أنت متأكد؟")) {
+    if (window.confirm("هل أنت متأكد من حذف هذا السائق؟ لا يمكن التراجع عن هذا الإجراء.")) {
       const { error } = await supabase.from('drivers').delete().eq('id', driverId);
-      if (error) alert("فشل حذف السائق");
-      else fetchData();
+      if (error) {
+        console.error("Supabase delete error:", error);
+        alert("فشل حذف السائق.");
+      } else {
+        fetchData();
+      }
     }
   };
   
@@ -198,12 +211,12 @@ export default function TransportCosts() {
       
       {can('add', 'Transport') && (
         <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-xl font-bold mb-4">{editingDriver ? "تعديل بيانات" : "إضافة سائق / سيارة"}</h2>
+          <h2 className="text-xl font-bold mb-4">{editingDriver ? "تعديل بيانات سائق" : "إضافة سائق / سيارة جديدة"}</h2>
           <form className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end" onSubmit={handleDriverSubmit}>
             <input required name="name" placeholder="الاسم" className="border p-2 rounded" defaultValue={editingDriver?.name || ""} />
             <input required name="workLocation" placeholder="موقع العمل" className="border p-2 rounded" defaultValue={editingDriver?.work_location || ""} />
             <input required name="paymentSource" placeholder="جهة الصرف" className="border p-2 rounded" defaultValue={editingDriver?.payment_source || ""} />
-            <input required name="dayCost" type="number" placeholder="تكلفة اليوم" className="border p-2 rounded" defaultValue={editingDriver?.daily_rate || ""} />
+            <input required name="dayCost" type="number" step="any" placeholder="تكلفة اليوم" className="border p-2 rounded" defaultValue={editingDriver?.daily_rate || ""} />
             {editingDriver && (
               <div className="flex items-center justify-center h-full">
                 <label className="flex items-center gap-2 cursor-pointer bg-gray-100 p-2 rounded-lg">
@@ -228,7 +241,7 @@ export default function TransportCosts() {
             </div>
             <div className="flex gap-2">
                 <button onClick={handleExportExcel} className="flex items-center bg-teal-600 text-white px-3 py-2 rounded-lg text-sm"><FileDown size={16} className="ml-2" />تصدير</button>
-                <button onClick={handleSaveToHistory} className="flex items-center bg-purple-600 text-white px-3 py-2 rounded-lg text-sm"><Save size={16} className="ml-2" />حفظ وترحيل</button>
+                {can('add', 'Transport') && <button onClick={handleSaveToHistory} className="flex items-center bg-purple-600 text-white px-3 py-2 rounded-lg text-sm"><Save size={16} className="ml-2" />حفظ وترحيل</button>}
             </div>
         </div>
         <table className="min-w-full table-auto border">
@@ -254,9 +267,9 @@ export default function TransportCosts() {
               const { totalDays, totalCost, extrasTotal, deductionsTotal } = getDriverTotal(driver.id);
               return (
                 <tr key={driver.id} className={`text-center text-sm ${!driver.is_active ? 'bg-gray-200 text-gray-500 italic' : 'hover:bg-gray-50'}`}>
-                  <td className="border px-2 py-1">{driver.name}</td><td>{driver.daily_rate}</td>
+                  <td className="border px-2 py-1 font-medium text-gray-800">{driver.name}</td><td>{driver.daily_rate}</td>
                   <td className="font-bold">{totalDays}</td><td>{extrasTotal}</td><td>{deductionsTotal}</td>
-                  <td className="font-bold">{totalCost}</td>
+                  <td className="font-bold text-base text-blue-700">{totalCost}</td>
                   {dayStrings.map((date, index) => (
                     <td key={index} className="border p-1">
                       <input type="number" step="0.5" min="0" max="2" defaultValue={attendance[driver.id]?.[date] || ""} 
@@ -268,9 +281,9 @@ export default function TransportCosts() {
                   {can('edit', 'Transport') && (
                     <td className="border px-2 py-1">
                       <div className="flex justify-center items-center gap-2">
-                        <button onClick={() => setManagingDriver(driver)} title="إدارة مالية"><DollarSign size={18}/></button>
-                        <button onClick={() => handleEditClick(driver)} title="تعديل بيانات"><Edit size={18}/></button>
-                        {can('delete', 'Transport') && <button onClick={() => deleteDriver(driver.id)} title="حذف"><Trash2 size={18}/></button>}
+                        <button onClick={() => setManagingDriver(driver)} title="إدارة مالية"><DollarSign size={18} className="text-green-600 hover:text-green-800"/></button>
+                        <button onClick={() => handleEditClick(driver)} title="تعديل بيانات"><Edit size={18} className="text-blue-600 hover:text-blue-800"/></button>
+                        {can('delete', 'Transport') && <button onClick={() => deleteDriver(driver.id)} title="حذف"><Trash2 size={18} className="text-red-600 hover:text-red-800"/></button>}
                       </div>
                     </td>
                   )}
