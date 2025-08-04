@@ -17,8 +17,6 @@ export default function FinancialsModal({ driver, periodKey, existingFinancials,
   const [type, setType] = useState<'extra' | 'deduction'>('extra');
   const [error, setError] = useState('');
 
-  // --- START OF CORRECTION ---
-  // تم تحويل الدالة إلى async للتعامل مع await
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     const numericAmount = parseFloat(amount);
@@ -43,26 +41,24 @@ export default function FinancialsModal({ driver, periodKey, existingFinancials,
     };
 
     try {
-      // استخدام await لانتظار انتهاء عملية الحفظ
       const { error: saveError } = await supabase.from('transport_financials').insert(newFinancialItem);
 
       if (saveError) {
-        throw saveError; // رمي الخطأ ليتم التقاطه في catch
+        throw saveError;
       }
 
-      // **التصحيح الرئيسي هنا**
-      // بعد نجاح الحفظ، قم باستدعاء الدالة لتحديث بيانات الصفحة الرئيسية
       alert('تم الحفظ بنجاح!');
       onSaveSuccess();
-      onClose(); // إغلاق الـ Modal بعد الحفظ
+      onClose();
 
     } catch (err: any) {
       console.error("Error saving financial item:", err);
       setError(`فشل الحفظ: ${err.message}`);
     }
   };
-  // --- END OF CORRECTION ---
 
+  // --- START OF CORRECTION ---
+  // تم تعديل الدالة للتعامل مع احتمالية أن يكون الـ ID غير موجود (احتياطياً)
   const handleDelete = async (itemId: number) => {
     if (window.confirm('هل أنت متأكد من حذف هذا البند؟')) {
       const { error: deleteError } = await supabase.from('transport_financials').delete().eq('id', itemId);
@@ -71,10 +67,11 @@ export default function FinancialsModal({ driver, periodKey, existingFinancials,
         console.error(deleteError);
       } else {
         alert('تم الحذف بنجاح.');
-        onSaveSuccess(); // تحديث القائمة بعد الحذف
+        onSaveSuccess();
       }
     }
   };
+  // --- END OF CORRECTION ---
 
   const extras = existingFinancials.filter(f => f.type === 'extra');
   const deductions = existingFinancials.filter(f => f.type === 'deduction');
@@ -87,7 +84,6 @@ export default function FinancialsModal({ driver, periodKey, existingFinancials,
           <button onClick={onClose} className="text-gray-500 hover:text-gray-800"><X size={24} /></button>
         </div>
 
-        {/* Form for adding new items */}
         <form onSubmit={handleSave} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end p-4 border rounded-lg mb-6">
           <div className="md:col-span-2">
             <label htmlFor="description" className="block text-sm font-medium text-gray-700">الوصف</label>
@@ -110,7 +106,6 @@ export default function FinancialsModal({ driver, periodKey, existingFinancials,
           </div>
         </form>
 
-        {/* Display existing items */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <h3 className="text-lg font-semibold mb-2 text-green-700">المستحقات الأخرى</h3>
@@ -119,7 +114,9 @@ export default function FinancialsModal({ driver, periodKey, existingFinancials,
                 <li key={item.id} className="flex justify-between items-center bg-green-50 p-2 rounded">
                   <span>{item.description}</span>
                   <span className="font-bold">{item.amount}</span>
-                  <button onClick={() => handleDelete(item.id)} className="text-red-500 text-xs">حذف</button>
+                  {/* --- START OF CORRECTION --- */}
+                  <button onClick={() => { if (item.id) { handleDelete(item.id) } }} className="text-red-500 text-xs">حذف</button>
+                  {/* --- END OF CORRECTION --- */}
                 </li>
               ))}
               {extras.length === 0 && <li className="text-gray-500">لا يوجد</li>}
@@ -132,7 +129,9 @@ export default function FinancialsModal({ driver, periodKey, existingFinancials,
                 <li key={item.id} className="flex justify-between items-center bg-red-50 p-2 rounded">
                   <span>{item.description}</span>
                   <span className="font-bold">{item.amount}</span>
-                  <button onClick={() => handleDelete(item.id)} className="text-red-500 text-xs">حذف</button>
+                  {/* --- START OF CORRECTION --- */}
+                  <button onClick={() => { if (item.id) { handleDelete(item.id) } }} className="text-red-500 text-xs">حذف</button>
+                  {/* --- END OF CORRECTION --- */}
                 </li>
               ))}
               {deductions.length === 0 && <li className="text-gray-500">لا يوجد</li>}
