@@ -1,144 +1,289 @@
-// --- START OF FILE src/pages/TransportCosts.tsx (النسخة النهائية الكاملة والمصححة) ---
-
 import React, { useEffect, useState, useMemo } from "react";
 import * as XLSX from "xlsx";
 import { useNavigate } from 'react-router-dom';
-import type { HistoricalPayroll } from '../App';
-import { useAuth } from '../context/AuthContext';
-import { Edit, Trash2, X, Save, DollarSign, PlusCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext.tsx';
+import { supabase } from '../supabaseClient.js';
+import { getPayrollDays, getYearsList, getMonthsList, toYMDString } from '../utils/attendanceCalculator.ts';
+import FinancialsModal from '../components/FinancialsModal.tsx';
+import { Edit, Trash2, Save, DollarSign, Loader, FileDown, Search } from 'lucide-react';
+import type { Driver, PublicHoliday, FinancialItem } from '../types.ts';
 
-interface Driver { id: number; name: string; workLocation: string; paymentSource: string; dayCost: number; }
-type DailyAttendance = { [date: string]: number };
-type MonthlyAttendance = { [driverId: number]: DailyAttendance };
-type AllAttendance = { [periodKey: string]: MonthlyAttendance };
+const months = getMonthsList();
+const years = getYearsList();
 
-interface FinancialItem { id: number; amount: number; note: string; }
-type FinancialItemsState = { [driverId: number]: FinancialItem[] };
-type AllFinancialItemsState = { [periodKey: string]: FinancialItemsState };
+const getInitialPeriod = () => {
+    const today = new Date();
+    // If it's the 26th or later, default to the next month's payroll
+    if (today.getDate() >= 26) {
+        today.setMonth(today.getMonth() + 1);
+    }
+    return { month: today.getMonth() + 1, year: today.getFullYear() };
+};
 
-interface TransportCostsProps {
-  historicalPayrolls: HistoricalPayroll[];
-  setHistoricalPayrolls: React.Dispatch<React.SetStateAction<HistoricalPayroll[]>>;
-}
+type TransportAttendanceState = {
+  [driverId: number]: {
+    [date: string]: number;
+  };
+};
 
-const DRIVERS_STORAGE_KEY = "transportDrivers_v1";
-const ATTENDANCE_STORAGE_KEY = "transportAttendance_v1";
-const EXTRAS_STORAGE_KEY = "transportExtras_v2";
-const DEDUCTIONS_STORAGE_KEY = "transportDeductions_v2";
-
-const generateDateRangeForMonth = (year: number, month: number): string[] => { const dates: string[] = []; const startDate = new Date(year, month - 2, 26); const endDate = new Date(year, month - 1, 25); for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) { const yyyy = d.getFullYear(); const mm = String(d.getMonth() + 1).padStart(2, '0'); const dd = String(d.getDate()).padStart(2, '0'); dates.push(`${yyyy}-${mm}-${dd}`); } return dates; };
-
-function TransportCosts({ historicalPayrolls, setHistoricalPayrolls }: TransportCostsProps) {
-  const today = new Date();
-  const [selectedMonth, setSelectedMonth] = useState(today.getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState(today.getFullYear());
-  const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [allAttendance, setAllAttendance] = useState<AllAttendance>({});
-  const [editingDriver, setEditingDriver] = useState<Driver | null>(null);
-  const [allExtras, setAllExtras] = useState<AllFinancialItemsState>({});
-  const [allDeductions, setAllDeductions] = useState<AllFinancialItemsState>({});
-  const [managingDriver, setManagingDriver] = useState<Driver | null>(null);
-  const navigate = useNavigate();
+export default function TransportCosts() {
   const { can } = useAuth();
-
-  const periodKey = `${selectedYear}-${selectedMonth.toString().padStart(2, '0')}`;
-  const days = useMemo(() => generateDateRangeForMonth(selectedYear, selectedMonth), [selectedYear, selectedMonth]);
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [attendance, setAttendance] = useState<TransportAttendanceState>({});
+  const [financials, setFinancials] = useState<FinancialItem[]>([]);
+  const [publicHolidays, setPublicHolidays] = useState<PublicHoliday[]>([]);
+  
+  const [selectedPeriod, setSelectedPeriod] = useState(getInitialPeriod);
+  const [editingDriver, setEditingDriver] = useState<Driver | null>(null);
+  const [managingDriver, setManagingDriver] = useState<Driver | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showInactive, setShowInactive] = useState(false);
+  const [isDriverActive, setIsDriverActive] = useState(true);
+  
+  const periodKey = `${selectedPeriod.year}-${selectedPeriod.month.toString().padStart(2, '0')}`;
+  const days = useMemo(() => getPayrollDays(selectedPeriod.year, selectedPeriod.month), [selectedPeriod]);
+  const dayStrings = useMemo(() => days.map(d => toYMDString(d)), [days]);
 
   useEffect(() => {
-    const savedDrivers = localStorage.getItem(DRIVERS_STORAGE_KEY);
-    if (savedDrivers) setDrivers(JSON.parse(savedDrivers));
-    const savedAttendance = localStorage.getItem(ATTENDANCE_STORAGE_KEY);
-    if (savedAttendance) setAllAttendance(JSON.parse(savedAttendance));
-    const savedExtras = localStorage.getItem(EXTRAS_STORAGE_KEY);
-    if (savedExtras) setAllExtras(JSON.parse(savedExtras));
-    const savedDeductions = localStorage.getItem(DEDUCTIONS_STORAGE_KEY);
-    if (savedDeductions) setAllDeductions(JSON.parse(savedDeductions));
-  }, []);
+    fetchData();
+  }, [periodKey]);
 
-  const saveDrivers = (updatedDrivers: Driver[]) => { setDrivers(updatedDrivers); localStorage.setItem(DRIVERS_STORAGE_KEY, JSON.stringify(updatedDrivers)); };
-  const saveAttendance = (updatedAttendance: AllAttendance) => { setAllAttendance(updatedAttendance); localStorage.setItem(ATTENDANCE_STORAGE_KEY, JSON.stringify(updatedAttendance)); };
-  const saveExtras = (updatedExtras: AllFinancialItemsState) => { setAllExtras(updatedExtras); localStorage.setItem(EXTRAS_STORAGE_KEY, JSON.stringify(updatedExtras)); };
-  const saveDeductions = (updatedDeductions: AllFinancialItemsState) => { setAllDeductions(updatedDeductions); localStorage.setItem(DEDUCTIONS_STORAGE_KEY, JSON.stringify(updatedDeductions)); };
-  
-  const addDriver = (driver: Driver) => { saveDrivers([...drivers, driver]); };
-  const updateDriver = (updatedDriver: Driver) => { saveDrivers(drivers.map(d => d.id === updatedDriver.id ? updatedDriver : d)); setEditingDriver(null); };
-  const deleteDriver = (driverId: number) => { if (window.confirm("هل أنت متأكد؟")) { saveDrivers(drivers.filter(d => d.id !== driverId)); } };
+  const fetchData = async () => {
+    if (!can('view', 'Transport')) { setLoading(false); return; }
+    setLoading(true);
 
-  const handleDayChange = (driverId: number, date: string, value: number) => { const newAllAttendance = { ...allAttendance }; if (!newAllAttendance[periodKey]) newAllAttendance[periodKey] = {}; if (!newAllAttendance[periodKey][driverId]) newAllAttendance[periodKey][driverId] = {}; if (value === 0 || isNaN(value)) { delete newAllAttendance[periodKey][driverId][date]; } else { newAllAttendance[periodKey][driverId][date] = value; } saveAttendance(newAllAttendance); };
+    const [driversRes, attRes, finRes, holRes] = await Promise.all([
+      supabase.from('drivers').select('*').order('name'),
+      supabase.from('transport_attendance').select('*').in('date', dayStrings),
+      supabase.from('transport_financials').select('*').eq('period', periodKey),
+      supabase.from('public_holidays').select('*')
+    ]);
+
+    setDrivers(driversRes.data || []);
+    const attByDriver = (attRes.data || []).reduce((acc: TransportAttendanceState, rec: { driver_id: number, date: string, trips: number }) => {
+      if (!acc[rec.driver_id]) acc[rec.driver_id] = {};
+      acc[rec.driver_id][rec.date] = rec.trips;
+      return acc;
+    }, {});
+    setAttendance(attByDriver);
+    setFinancials(finRes.data || []);
+    setPublicHolidays(holRes.data || []);
+    setLoading(false);
+  };
+
+  const handleEditClick = (driver: Driver) => {
+    setEditingDriver(driver);
+    setIsDriverActive(driver.is_active);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingDriver(null);
+    setIsDriverActive(true);
+  };
+
+  // --- START OF CORRECTION ---
+  const handleDriverSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const form = e.target as HTMLFormElement;
+
+    // **التصحيح الرئيسي هنا**
+    // أسماء المفاتيح (مثل work_location) يجب أن تطابق أسماء الأعمدة في قاعدة بيانات Supabase
+    const driverData = { 
+        name: (form.elements.namedItem('name') as HTMLInputElement).value, 
+        work_location: (form.elements.namedItem('workLocation') as HTMLInputElement).value, 
+        payment_source: (form.elements.namedItem('paymentSource') as HTMLInputElement).value, 
+        daily_rate: Number((form.elements.namedItem('dayCost') as HTMLInputElement).value),
+        is_active: isDriverActive
+    };
+
+    if (editingDriver) {
+      const { error } = await supabase.from('drivers').update(driverData).eq('id', editingDriver.id);
+      if (error) {
+        console.error("Supabase update error:", error);
+        alert("فشل تحديث بيانات السائق. تحقق من الـ Console لمزيد من التفاصيل.");
+      }
+    } else {
+      // عند الإضافة، لا نرسل `is_active` من الحالة، بل نجعلها `true` دائماً
+      const { error } = await supabase.from('drivers').insert({ ...driverData, is_active: true });
+      if (error) {
+        console.error("Supabase insert error:", error);
+        alert("فشل إضافة السائق. تحقق من الـ Console لمزيد من التفاصيل.");
+      }
+    }
+
+    handleCancelEdit();
+    form.reset();
+    fetchData(); // إعادة تحميل البيانات لإظهار التغييرات
+  };
+  // --- END OF CORRECTION ---
+
+  const deleteDriver = async (driverId: number) => {
+    if (window.confirm("هل أنت متأكد من حذف هذا السائق؟ لا يمكن التراجع عن هذا الإجراء.")) {
+      const { error } = await supabase.from('drivers').delete().eq('id', driverId);
+      if (error) {
+        console.error("Supabase delete error:", error);
+        alert("فشل حذف السائق.");
+      } else {
+        fetchData();
+      }
+    }
+  };
   
-  const currentMonthAttendance = allAttendance[periodKey] || {};
-  const currentMonthExtras = allExtras[periodKey] || {};
-  const currentMonthDeductions = allDeductions[periodKey] || {};
+  const handleDayChange = async (driverId: number, date: string, value: number) => {
+    const trips = isNaN(value) || value < 0 ? 0 : value;
+    const record = { driver_id: driverId, date: date, trips: trips };
+    const { error } = await supabase.from('transport_attendance').upsert(record, { onConflict: 'driver_id, date' });
+    if (error) {
+      console.error("Failed to save attendance:", error);
+    } else {
+      setAttendance((prev: TransportAttendanceState) => ({ 
+        ...prev, 
+        [driverId]: { ...(prev[driverId] || {}), [date]: trips } 
+      }));
+    }
+  };
 
   const getDriverTotal = (driverId: number) => {
-    const records = currentMonthAttendance[driverId] || {};
-    const totalDays = Object.values(records).reduce((acc, val) => acc + Number(val || 0), 0);
+    const records = attendance[driverId] || {};
+    const totalDays = Object.values(records).reduce((acc: number, val: number) => acc + Number(val || 0), 0);
     const driver = drivers.find((d) => d.id === driverId);
-    const baseCost = totalDays * (driver?.dayCost || 0);
-    const extrasTotal = (currentMonthExtras[driverId] || []).reduce((sum, item) => sum + item.amount, 0);
-    const deductionsTotal = (currentMonthDeductions[driverId] || []).reduce((sum, item) => sum + item.amount, 0);
-    return { totalDays, totalCost: baseCost + extrasTotal - deductionsTotal, extrasTotal, deductionsTotal };
+    const baseCost = totalDays * (driver?.daily_rate || 0);
+    const driverFinancials = financials.filter(f => f.driver_id === driverId);
+    const extrasTotal = driverFinancials.filter(f => f.type === 'extra').reduce((sum, item) => sum + item.amount, 0);
+    const deductionsTotal = driverFinancials.filter(f => f.type === 'deduction').reduce((sum, item) => sum + item.amount, 0);
+    return { totalDays, totalCost: baseCost + extrasTotal - deductionsTotal, extrasTotal, deductionsTotal, baseCost };
   };
-  
-  const handleSaveExtras = (driverId: number, extras: FinancialItem[], deductions: FinancialItem[]) => {
-    setAllExtras(prev => ({ ...prev, [periodKey]: { ...prev[periodKey], [driverId]: extras } }));
-    setAllDeductions(prev => ({ ...prev, [periodKey]: { ...prev[periodKey], [driverId]: deductions } }));
-    setManagingDriver(null);
-  };
-  
-  const saveTransportCost = () => { const monthlyTotal = drivers.reduce((total, driver) => total + getDriverTotal(driver.id).totalCost, 0); setHistoricalPayrolls(prev => { const existingIndex = prev.findIndex(p => p.year === selectedYear && p.month === selectedMonth); const newPayrolls = [...prev]; if (existingIndex > -1) { newPayrolls[existingIndex] = { ...newPayrolls[existingIndex], transportCost: monthlyTotal }; } else { newPayrolls.push({ year: selectedYear, month: selectedMonth, transportCost: monthlyTotal }); } return newPayrolls; }); alert("تم حفظ تكلفة النقل بنجاح!"); navigate('/history'); };
-  const handleExportExcel = () => { const exportData = drivers.map((driver) => { const { totalDays, totalCost, extrasTotal, deductionsTotal } = getDriverTotal(driver.id); return { "اسم السائق": driver.name, "موقع العمل": driver.workLocation, "جهة الصرف": driver.paymentSource, "قيمة اليوم": driver.dayCost, "عدد الأيام": totalDays, "مستحقات أخرى": extrasTotal, "خصومات": deductionsTotal, "إجمالي التكلفة": totalCost }; }); const ws = XLSX.utils.json_to_sheet(exportData); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "تكلفة النقل"); XLSX.writeFile(wb, "transport-costs.xlsx"); };
-  const handlePrint = () => { const printable = drivers.map((driver) => { const { totalDays, totalCost, extrasTotal, deductionsTotal } = getDriverTotal(driver.id); return `<tr><td>${driver.name}</td><td>${driver.dayCost}</td><td>${totalDays}</td><td>${extrasTotal}</td><td>${deductionsTotal}</td><td>${totalCost}</td></tr>`; }).join(""); const newWindow = window.open("", "_blank"); if (newWindow) { newWindow.document.write(`<html dir="rtl"><head><title>طباعة</title><style>table{border-collapse:collapse;width:100%;}td,th{border:1px solid #000;padding:8px;text-align:center;}</style></head><body><h2>ملخص تكلفة النقل</h2><table><thead><tr><th>اسم السائق</th><th>قيمة اليوم</th><th>عدد الأيام</th><th>مستحقات أخرى</th><th>خصومات</th><th>إجمالي التكلفة</th></tr></thead><tbody>${printable}</tbody></table></body></html>`); newWindow.document.close(); newWindow.print(); } };
 
+  const handleSaveToHistory = async () => {
+      const reportData = drivers.map(driver => {
+          const totals = getDriverTotal(driver.id);
+          return {
+              driver_id: driver.id,
+              driver_name: driver.name,
+              work_location: driver.work_location,
+              payment_source: driver.payment_source,
+              day_cost: driver.daily_rate,
+              ...totals
+          };
+      });
+      if (window.confirm(`هل أنت متأكد من حفظ وترحيل تكلفة النقل لشهر ${periodKey}؟`)) {
+          const { error } = await supabase.from('historical_payrolls').upsert({ period: periodKey, transport_cost_data: { report: reportData } }, { onConflict: 'period' });
+          if (error) { alert('فشل حفظ التقرير.'); console.error(error); } 
+          else { alert('تم حفظ وترحيل التقرير بنجاح!'); navigate('/history'); }
+      }
+  };
+
+  const handleExportExcel = () => {
+      const exportData = filteredDrivers.map((driver) => {
+          const { totalDays, totalCost, extrasTotal, deductionsTotal, baseCost } = getDriverTotal(driver.id);
+          return { "اسم السائق": driver.name, "موقع العمل": driver.work_location, "جهة الصرف": driver.payment_source, "قيمة اليوم": driver.daily_rate, "عدد الأيام": totalDays, "التكلفة الأساسية": baseCost, "مستحقات أخرى": extrasTotal, "خصومات": deductionsTotal, "إجمالي التكلفة": totalCost, };
+      });
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, `تكلفة النقل ${periodKey}`);
+      XLSX.writeFile(wb, `TransportCosts_${periodKey}.xlsx`);
+  };
+  
+  const filteredDrivers = useMemo(() => 
+    drivers.filter(driver => {
+      const isActive = driver.is_active;
+      const matchesSearch = driver.name.toLowerCase().includes(searchTerm.toLowerCase());
+      if (showInactive) {
+        return matchesSearch;
+      }
+      return isActive && matchesSearch;
+    })
+  , [drivers, searchTerm, showInactive]);
+
+  if (loading) { return <div className="flex justify-center items-center h-screen"><Loader className="animate-spin text-blue-500" /></div>; }
+  
   return (
-    <div className="space-y-10 p-4">
-      <div className="flex flex-wrap gap-4 items-center">
-        <select className="border rounded px-2 py-1" value={selectedMonth} onChange={(e) => setSelectedMonth(Number(e.target.value))}>{Array.from({ length: 12 }, (_, i) => (<option key={i + 1} value={i + 1}>{new Date(0, i).toLocaleString("ar-EG", { month: "long" })}</option>))}</select>
-        <select className="border rounded px-2 py-1" value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))}>{[2024, 2025, 2026].map((y) => (<option key={y}>{y}</option>))}</select>
-        {can('view', 'Transport') && <button onClick={handleExportExcel} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">تصدير Excel</button>}
-        {can('view', 'Transport') && <button onClick={handlePrint} className="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700">طباعة</button>}
-        {can('add', 'Transport') && <button onClick={saveTransportCost} className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700">حفظ وترحيل التكلفة</button>}
+    <div className="space-y-6 p-4 md:p-6" dir="rtl">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+          <h1 className="text-3xl font-bold">تكاليف النقل</h1>
+          <div className="flex items-center gap-2">
+            <select className="border rounded px-2 py-1" value={selectedPeriod.month} onChange={(e) => setSelectedPeriod({...selectedPeriod, month: Number(e.target.value)})}>{months.map(m => <option key={m.value} value={m.value}>{m.name}</option>)}</select>
+            <select className="border rounded px-2 py-1" value={selectedPeriod.year} onChange={(e) => setSelectedPeriod({...selectedPeriod, year: Number(e.target.value)})}>{years.map(y => <option key={y}>{y}</option>)}</select>
+          </div>
       </div>
       
-      {can('add', 'Transport') && (<div className="bg-white p-6 rounded-lg shadow"><h2 className="text-xl font-bold mb-4">{editingDriver ? "تعديل بيانات السائق" : "إضافة سائق / سيارة"}</h2><form className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" onSubmit={(e) => { e.preventDefault(); const form = e.target as HTMLFormElement; const driverData = { id: editingDriver ? editingDriver.id : Date.now(), name: (form.elements.namedItem('name') as HTMLInputElement).value, workLocation: (form.elements.namedItem('workLocation') as HTMLInputElement).value, paymentSource: (form.elements.namedItem('paymentSource') as HTMLInputElement).value, dayCost: Number((form.elements.namedItem('dayCost') as HTMLInputElement).value) }; if (editingDriver) { updateDriver(driverData); } else { addDriver(driverData); } form.reset(); setEditingDriver(null); }}><input required name="name" placeholder="اسم السائق" className="border p-2 rounded" defaultValue={editingDriver?.name || ""} /><input required name="workLocation" placeholder="موقع العمل" className="border p-2 rounded" defaultValue={editingDriver?.workLocation || ""} /><input required name="paymentSource" placeholder="جهة الصرف" className="border p-2 rounded" defaultValue={editingDriver?.paymentSource || ""} /><input required name="dayCost" type="number" placeholder="تكلفة اليوم" className="border p-2 rounded" defaultValue={editingDriver?.dayCost || ""} /><div className="col-span-full"><button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">{editingDriver ? "حفظ التعديل" : "إضافة السائق"}</button>{editingDriver && (<button type="button" onClick={() => setEditingDriver(null)} className="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700 ml-2">إلغاء</button>)}</div></form></div>)}
+      {can('add', 'Transport') && (
+        <div className="bg-white p-6 rounded-lg shadow">
+          <h2 className="text-xl font-bold mb-4">{editingDriver ? "تعديل بيانات سائق" : "إضافة سائق / سيارة جديدة"}</h2>
+          <form className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end" onSubmit={handleDriverSubmit}>
+            <input required name="name" placeholder="الاسم" className="border p-2 rounded" defaultValue={editingDriver?.name || ""} />
+            <input required name="workLocation" placeholder="موقع العمل" className="border p-2 rounded" defaultValue={editingDriver?.work_location || ""} />
+            <input required name="paymentSource" placeholder="جهة الصرف" className="border p-2 rounded" defaultValue={editingDriver?.payment_source || ""} />
+            <input required name="dayCost" type="number" step="any" placeholder="تكلفة اليوم" className="border p-2 rounded" defaultValue={editingDriver?.daily_rate || ""} />
+            {editingDriver && (
+              <div className="flex items-center justify-center h-full">
+                <label className="flex items-center gap-2 cursor-pointer bg-gray-100 p-2 rounded-lg">
+                  <input type="checkbox" checked={isDriverActive} onChange={e => setIsDriverActive(e.target.checked)} className="h-5 w-5 rounded" />
+                  <span>نشط</span>
+                </label>
+              </div>
+            )}
+            <div className={`flex gap-2 ${editingDriver ? 'col-span-full' : 'lg:col-span-1'}`}>
+              <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded flex-1">{editingDriver ? "حفظ التعديلات" : "إضافة"}</button>
+              {editingDriver && (<button type="button" onClick={handleCancelEdit} className="bg-gray-500 text-white px-4 py-2 rounded">إلغاء</button>)}
+            </div>
+          </form>
+        </div>
+      )}
       
-      <div className="bg-white p-4 rounded-lg shadow overflow-auto">
-        <h2 className="text-xl font-bold mb-4">تسجيل الحضور وحساب التكلفة لشهر: {selectedMonth}/{selectedYear}</h2>
-        <table className="min-w-max table-auto border">
+      <div className="bg-white p-4 rounded-lg shadow overflow-x-auto">
+        <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center gap-4">
+                <div className="relative"><Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} /><input type="text" placeholder="بحث بالاسم..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full md:w-64 px-4 py-2 pr-10 border rounded-lg" /></div>
+                <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} className="h-5 w-5 rounded" /><span>إظهار غير النشطين</span></label>
+            </div>
+            <div className="flex gap-2">
+                <button onClick={handleExportExcel} className="flex items-center bg-teal-600 text-white px-3 py-2 rounded-lg text-sm"><FileDown size={16} className="ml-2" />تصدير</button>
+                {can('add', 'Transport') && <button onClick={handleSaveToHistory} className="flex items-center bg-purple-600 text-white px-3 py-2 rounded-lg text-sm"><Save size={16} className="ml-2" />حفظ وترحيل</button>}
+            </div>
+        </div>
+        <table className="min-w-full table-auto border">
           <thead className="bg-gray-100 text-sm text-gray-700">
             <tr>
               <th className="border px-2 py-1">الاسم</th><th className="border px-2 py-1">قيمة اليوم</th><th className="border px-2 py-1">عدد الأيام</th>
-              <th className="border px-2 py-1">مستحقات أخرى</th><th className="border px-2 py-1">خصومات</th>
+              <th className="border px-2 py-1">مستحقات</th><th className="border px-2 py-1">خصومات</th>
               <th className="border px-2 py-1">الإجمالي</th>
-              {days.map((date) => (<th key={date} className="border px-2 py-1 whitespace-nowrap text-center"><div className="text-xs">{new Date(date + "T00:00:00").toLocaleDateString("ar-EG", { weekday: "short", timeZone: "UTC" })}</div><div className="text-xs text-gray-600">{date.slice(5)}</div></th>))}
-              {can('edit', 'Transport') && <th className="border px-2 py-1">الإجراءات</th>}
+              {days.map((day, index) => {
+                  const dayOfWeek = day.getUTCDay();
+                  const isFriday = dayOfWeek === 5;
+                  const isHoliday = publicHolidays.some(h => h.date === toYMDString(day));
+                  let headerClass = "border px-2 py-1 whitespace-nowrap text-center";
+                  if (isFriday) headerClass += " bg-gray-200";
+                  if (isHoliday) headerClass += " bg-yellow-200";
+                  return (<th key={index} className={headerClass}><div className="text-xs">{day.toLocaleDateString("ar-EG", { weekday: "short" })}</div><div>{toYMDString(day).slice(8)}</div></th>)
+              })}
+              {can('edit', 'Transport') && <th className="border px-2 py-1">إجراءات</th>}
             </tr>
           </thead>
           <tbody>
-            {drivers.map((driver) => {
+            {filteredDrivers.map((driver) => {
               const { totalDays, totalCost, extrasTotal, deductionsTotal } = getDriverTotal(driver.id);
               return (
-                <tr key={driver.id} className="text-center">
-                  <td className="border px-2 py-1">{driver.name}</td>
-                  <td className="border px-2 py-1">{driver.dayCost}</td>
-                  <td className="border px-2 py-1 font-bold text-blue-700">{totalDays}</td>
-                  <td className="border px-2 py-1 text-green-600">{extrasTotal.toFixed(2)}</td>
-                  <td className="border px-2 py-1 text-red-600">{deductionsTotal.toFixed(2)}</td>
-                  <td className="border px-2 py-1 font-bold text-green-700">{totalCost.toFixed(2)}</td>
-                  {days.map((date) => (
-                    <td key={date} className="border px-1 py-1">
-                      <input type="number" step="0.5" min="0" max="2" value={currentMonthAttendance[driver.id]?.[date] || ""} 
+                <tr key={driver.id} className={`text-center text-sm ${!driver.is_active ? 'bg-gray-200 text-gray-500 italic' : 'hover:bg-gray-50'}`}>
+                  <td className="border px-2 py-1 font-medium text-gray-800">{driver.name}</td><td>{driver.daily_rate}</td>
+                  <td className="font-bold">{totalDays}</td><td>{extrasTotal}</td><td>{deductionsTotal}</td>
+                  <td className="font-bold text-base text-blue-700">{totalCost}</td>
+                  {dayStrings.map((date, index) => (
+                    <td key={index} className="border p-1">
+                      <input type="number" step="0.5" min="0" max="2" defaultValue={attendance[driver.id]?.[date] || ""} 
                        disabled={!can('edit', 'Transport')}
-                       onChange={(e) => handleDayChange(driver.id, date, parseFloat(e.target.value || "0"))} 
-                       className="w-14 text-center border rounded px-1 py-0.5 text-sm disabled:bg-gray-100 disabled:cursor-not-allowed" />
+                       onBlur={(e) => handleDayChange(driver.id, date, parseFloat(e.target.value || "0"))} 
+                       className="w-14 text-center border rounded"/>
                     </td>
                   ))}
                   {can('edit', 'Transport') && (
                     <td className="border px-2 py-1">
                       <div className="flex justify-center items-center gap-2">
-                        <button onClick={() => setManagingDriver(driver)} className="text-green-600 hover:text-green-800" title="إدارة مالية"><DollarSign size={18}/></button>
-                        <button onClick={() => setEditingDriver(driver)} className="text-yellow-600 hover:text-yellow-800" title="تعديل بيانات"><Edit size={18}/></button>
-                        {can('delete', 'Transport') && <button onClick={() => deleteDriver(driver.id)} className="text-red-600 hover:text-red-800" title="حذف"><Trash2 size={18}/></button>}
+                        <button onClick={() => setManagingDriver(driver)} title="إدارة مالية"><DollarSign size={18} className="text-green-600 hover:text-green-800"/></button>
+                        <button onClick={() => handleEditClick(driver)} title="تعديل بيانات"><Edit size={18} className="text-blue-600 hover:text-blue-800"/></button>
+                        {can('delete', 'Transport') && <button onClick={() => deleteDriver(driver.id)} title="حذف"><Trash2 size={18} className="text-red-600 hover:text-red-800"/></button>}
                       </div>
                     </td>
                   )}
@@ -152,86 +297,11 @@ function TransportCosts({ historicalPayrolls, setHistoricalPayrolls }: Transport
         <FinancialsModal
           driver={managingDriver}
           periodKey={periodKey}
-          currentExtras={currentMonthExtras[managingDriver.id] || []}
-          currentDeductions={currentMonthDeductions[managingDriver.id] || []}
-          setAllExtras={saveExtras}
-          setAllDeductions={saveDeductions}
+          existingFinancials={financials.filter(f => f.driver_id === managingDriver.id)}
           onClose={() => setManagingDriver(null)}
+          onSaveSuccess={fetchData}
         />
       )}
     </div>
   );
 }
-
-interface FinancialsModalProps {
-    driver: Driver;
-    periodKey: string;
-    currentExtras: FinancialItem[];
-    currentDeductions: FinancialItem[];
-    setAllExtras: (updater: (prev: AllFinancialItemsState) => AllFinancialItemsState) => void;
-    setAllDeductions: (updater: (prev: AllFinancialItemsState) => AllFinancialItemsState) => void;
-    onClose: () => void;
-}
-function FinancialsModal({ driver, periodKey, currentExtras, currentDeductions, setAllExtras, setAllDeductions, onClose }: FinancialsModalProps) {
-    const [extras, setExtras] = useState<FinancialItem[]>(currentExtras);
-    const [deductions, setDeductions] = useState<FinancialItem[]>(currentDeductions);
-
-    const handleSave = () => {
-        setAllExtras(prev => ({ ...prev, [periodKey]: { ...(prev[periodKey] || {}), [driver.id]: extras } }));
-        setAllDeductions(prev => ({ ...prev, [periodKey]: { ...(prev[periodKey] || {}), [driver.id]: deductions } }));
-        onClose();
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
-            <div className="bg-white p-6 rounded-lg shadow-2xl w-full max-w-4xl flex flex-col h-full max-h-[90vh]">
-                <div className="flex-shrink-0 flex justify-between items-center mb-4 border-b pb-3"><h2 className="text-2xl font-bold text-gray-800">إدارة مالية للسائق: {driver.name}</h2><button onClick={onClose} className="text-gray-500 hover:text-gray-800"><X size={28} /></button></div>
-                <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6 overflow-hidden">
-                    <FinancialSection title="مستحقات أخرى" items={extras} setItems={setExtras} color="green" />
-                    <FinancialSection title="خصومات" items={deductions} setItems={setDeductions} color="red" />
-                </div>
-                <div className="flex-shrink-0 mt-6 text-left border-t pt-4"><button onClick={handleSave} className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 flex items-center"><Save className="mr-2"/>حفظ التغييرات</button></div>
-            </div>
-        </div>
-    );
-}
-
-interface FinancialSectionProps { title: string; items: FinancialItem[]; setItems: React.Dispatch<React.SetStateAction<FinancialItem[]>>; color: 'green' | 'red'; }
-function FinancialSection({ title, items, setItems, color }: FinancialSectionProps) {
-    const [amount, setAmount] = useState('');
-    const [note, setNote] = useState('');
-
-    const handleAddItem = () => {
-        if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) { alert('الرجاء إدخال مبلغ صحيح.'); return; }
-        const newItem: FinancialItem = { id: Date.now(), amount: Number(amount), note };
-        setItems(prev => [...prev, newItem]);
-        setAmount(''); setNote('');
-    };
-    
-    const handleDeleteItem = (id: number) => { setItems(prev => prev.filter(item => item.id !== id)); };
-    const total = items.reduce((sum, item) => sum + item.amount, 0);
-
-    return (
-        <div className="flex flex-col min-h-0 border rounded-lg p-4 bg-gray-50">
-            <h3 className={`text-xl font-semibold mb-4 text-${color}-600`}>{title}</h3>
-            <div className="flex items-end gap-2 mb-4">
-                <div className="flex-grow"><label className="text-xs">المبلغ</label><input type="number" value={amount} onChange={e => setAmount(e.target.value)} className="w-full p-2 border rounded-md" /></div>
-                <div className="flex-grow"><label className="text-xs">البيان</label><input type="text" value={note} onChange={e => setNote(e.target.value)} className="w-full p-2 border rounded-md" /></div>
-                <button onClick={handleAddItem} className={`bg-${color}-500 text-white p-2 rounded-md hover:bg-${color}-600 shrink-0`}><PlusCircle/></button>
-            </div>
-            <div className="flex-1 overflow-y-auto space-y-2 border-t pt-2">
-                {items.map(item => (
-                    <div key={item.id} className="flex items-center justify-between bg-white p-2 rounded shadow-sm">
-                        <span className="flex-1 text-sm">{item.note || 'بدون بيان'}</span>
-                        <span className="font-semibold mx-4">{item.amount.toLocaleString()}</span>
-                        <button onClick={() => handleDeleteItem(item.id)} className="text-gray-400 hover:text-red-600"><Trash2 size={16}/></button>
-                    </div>
-                ))}
-                {items.length === 0 && <p className="text-center text-gray-400 pt-4">لا توجد بنود.</p>}
-            </div>
-            <div className={`mt-4 pt-2 border-t font-bold text-lg text-right text-${color}-600`}>الإجمالي: {total.toLocaleString()}</div>
-        </div>
-    );
-}
-
-export default TransportCosts;
