@@ -1,30 +1,34 @@
-// --- START OF FILE src/components/PayrollDetailModal.tsx (نسخة محسنة مع الأنواع) ---
+// --- START OF FILE src/components/PayrollDetailModal.tsx (نسخة محسنة مع الأنواع والتعديلات المطلوبة) ---
 
 import React, { useRef } from 'react';
 import { X, Printer } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
-// --- بداية التعديل ---
-// تعريف واجهة (interface) للـ props الخاصة بـ DetailRow
 interface DetailRowProps {
     label: string;
-    value: string | number; // القيمة يمكن أن تكون نصاً أو رقماً
-    colorClass?: string;    // '?' تعني أن هذا الـ prop اختياري
-    isBold?: boolean;       // وهذا أيضاً اختياري
+    value: string | number;
+    colorClass?: string;
+    isBold?: boolean;
 }
 
-// استخدام الواجهة في تعريف المكون
 const DetailRow: React.FC<DetailRowProps> = ({ label, value, colorClass = 'text-gray-900', isBold = false }) => (
-// --- نهاية التعديل ---
     <div className="flex justify-between items-center py-2 px-3 border-b">
         <span className={`font-semibold text-sm ${isBold ? 'text-gray-800' : 'text-gray-600'}`}>{label}</span>
         <span className={`font-mono font-bold ${colorClass} ${isBold ? 'text-base' : 'text-base'}`}>{value}</span>
     </div>
 );
 
-// لا تغيير هنا، كل شيء سليم
-export default function PayrollDetailModal({ reportItem, onClose }: { reportItem: any, onClose: () => void }) {
+// --- بداية التعديل 1: تحديث واجهة الـ props ---
+interface PayrollDetailModalProps {
+    reportItem: any;
+    onClose: () => void;
+    year: string;  // استقبال السنة
+    month: string; // استقبال الشهر
+}
+
+export default function PayrollDetailModal({ reportItem, onClose, year, month }: PayrollDetailModalProps) {
+// --- نهاية التعديل 1 ---
     const modalContentRef = useRef<HTMLDivElement>(null);
 
     if (!reportItem) return null;
@@ -58,7 +62,11 @@ export default function PayrollDetailModal({ reportItem, onClose }: { reportItem
                 <div ref={modalContentRef} className="p-6">
                     <div className="flex justify-between items-center mb-3">
                         <div>
-                            <h2 className="text-xl font-bold text-gray-800">تفاصيل راتب</h2>
+                            {/* --- بداية التعديل 2: تحديث العنوان --- */}
+                            <h2 className="text-xl font-bold text-gray-800">
+                                تفاصيل راتب - {new Date(Number(year), Number(month) - 1).toLocaleString('ar-EG', { month: 'long', year: 'numeric' })}
+                            </h2>
+                            {/* --- نهاية التعديل 2 --- */}
                             <p className="text-lg text-blue-700 font-semibold">{employee.name}</p>
                         </div>
                         <span className="text-sm text-gray-500">أيام الحضور: {totalWorkDays}</span>
@@ -69,7 +77,9 @@ export default function PayrollDetailModal({ reportItem, onClose }: { reportItem
                         
                         <div className="bg-green-50"><DetailRow label="قيمة الإضافي" value={totalOvertimePay.toFixed(2)} colorClass="text-green-700" /></div>
                         <div className="bg-green-50"><DetailRow label="البدلات" value={totalAllowances.toFixed(2)} colorClass="text-green-700" /></div>
-                        <div className="bg-green-50"><DetailRow label="المكافآت الخاصة" value={totalBonuses.toFixed(2)} colorClass="text-green-700" /></div>
+                        {/* --- بداية التعديل 3: تغيير المسمى --- */}
+                        <div className="bg-green-50"><DetailRow label="مستحقات-مكافآت" value={totalBonuses.toFixed(2)} colorClass="text-green-700" /></div>
+                        {/* --- نهاية التعديل 3 --- */}
                         <div className="bg-green-50"><DetailRow label="المنحة العامة" value={generalBonus.toFixed(2)} colorClass="text-green-700" /></div>
                         <DetailRow label="إجمالي المستحقات" value={(basePay + totalAdditions).toFixed(2)} colorClass="text-green-800 font-extrabold" isBold />
                         

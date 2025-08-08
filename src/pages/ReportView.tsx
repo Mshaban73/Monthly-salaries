@@ -225,7 +225,17 @@ export default function ReportView() {
         </div>
       )}
       
-      {selectedPayrollItem && (<PayrollDetailModal reportItem={selectedPayrollItem} onClose={() => setSelectedPayrollItem(null)} />)}
+      {/* --- بداية التعديل --- */}
+      {selectedPayrollItem && (
+        <PayrollDetailModal 
+          reportItem={selectedPayrollItem} 
+          onClose={() => setSelectedPayrollItem(null)}
+          year={year as string}  // تمرير السنة
+          month={month as string} // تمرير الشهر
+        />
+      )}
+      {/* --- نهاية التعديل --- */}
+
       {selectedTransportItem && (<TransportDetailModal reportItem={selectedTransportItem} onClose={() => setSelectedTransportItem(null)} />)}
     </div>
   );
