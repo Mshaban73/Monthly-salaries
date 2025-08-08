@@ -1,4 +1,4 @@
-// --- START OF FILE src/pages/Payroll.tsx (الكامل والنهائي والمصحح) ---
+// --- START OF FILE src/pages/Payroll.tsx (النسخة النهائية مع الحساب الصحيح لأيام الإضافي) ---
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -141,6 +141,19 @@ export default function Payroll() {
     const bonusDays = Number(generalBonusDays) || 0;
     return filteredEmployees.map(emp => {
       const summary = calculateAttendanceSummary(emp, attendanceRecords, publicHolidays, payrollDays);
+      
+      // --- بداية التعديل النهائي والحاسم ---
+      // 1. نجمع إجمالي ساعات الإضافي الفعلية من الملخص الذي تم حسابه
+      const totalRawOvertimeHours = (summary.weekdayOvertime?.rawHours || 0) + 
+                                  (summary.thursdayOvertime?.rawHours || 0) + 
+                                  (summary.restDayOvertime?.rawHours || 0) + 
+                                  (summary.holidayOvertime?.rawHours || 0);
+
+      // 2. نحسب مكافئ الأيام بالقسمة على عدد ساعات يوم العمل
+      const hoursInWorkDay = emp.hours_per_day || 8;
+      const overtimeDaysCount = totalRawOvertimeHours / hoursInWorkDay;
+      // --- نهاية التعديل ---
+
       const bdRecord = bonusesDeductions.find(r => r.employee_id === emp.id);
       const dailyRate = emp.salary_type === 'شهري' ? (emp.salary_amount / 30) : emp.salary_amount;
       const isEligible = eligibilityMap[emp.id] ?? (emp.isEligible ?? true);
@@ -171,12 +184,11 @@ export default function Payroll() {
       const loanInstallment = activeLoan ? (activeLoan.total_amount / activeLoan.installments) : 0;
       const netSalary = basePay + totalOvertimePay + totalAllowances + manualBonus + generalBonusValue - manualDeduction - loanInstallment;
       
-      // --- بداية التعديل ---
       return { 
         employee: { id: emp.id, name: emp.name, work_location: emp.work_location, payment_source: emp.payment_source },
         basePay, 
         totalWorkDays: summary.actualAttendanceDays,
-        overtimeDaysCount: summary.overtimeDaysCount, // <-- إضافة القيمة الجديدة
+        overtimeDaysCount: overtimeDaysCount, // <-- استخدام القيمة الجديدة المحسوبة هنا
         totalOvertimePay, 
         totalBonuses: manualBonus, 
         totalAllowances, 
@@ -186,7 +198,6 @@ export default function Payroll() {
         netSalary, 
         isEligible
       };
-      // --- نهاية التعديل ---
     });
   }, [filteredEmployees, attendanceRecords, publicHolidays, payrollDays, bonusesDeductions, generalBonusDays, excludedEmployees, loans, selectedPeriod, eligibilityMap]);
 
