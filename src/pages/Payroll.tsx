@@ -67,7 +67,7 @@ export default function Payroll() {
   const [filterLocation, setFilterLocation] = useState<string>('all');
   const [filterSource, setFilterSource] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
-  const [eligibilityMap, setEligibilityMap] = useState<{ [key: number]: boolean }>({}); // حالة جديدة للاستحقاق
+  const [eligibilityMap, setEligibilityMap] = useState<{ [key: number]: boolean }>({});
 
   const [isLoanModalOpen, setIsLoanModalOpen] = useState(false);
   const [locationCostModalData, setLocationCostModalData] = useState<any | null>(null);
@@ -93,7 +93,7 @@ export default function Payroll() {
     if (!can('view', 'Payroll')) { setLoading(false); return; }
     setLoading(true);
     const startDate = toYMDString(payrollDays[0]);
-    const endDate = toYMDString(payrollDays[payrollDays.length - 1]); // إعلان endDate
+    const endDate = toYMDString(payrollDays[payrollDays.length - 1]);
     const [empRes, attRes, holRes, bdRes, loanRes, settingsRes] = await Promise.all([
         supabase.from('employees').select('*').eq('is_active', true),
         supabase.from('attendance').select('*').gte('date', startDate).lte('date', endDate),
@@ -143,10 +143,10 @@ export default function Payroll() {
       const summary = calculateAttendanceSummary(emp, attendanceRecords, publicHolidays, payrollDays);
       const bdRecord = bonusesDeductions.find(r => r.employee_id === emp.id);
       const dailyRate = emp.salary_type === 'شهري' ? (emp.salary_amount / 30) : emp.salary_amount;
-      const isEligible = eligibilityMap[emp.id] ?? (emp.isEligible ?? true); // استخدام eligibilityMap أو isEligible من Employee
+      const isEligible = eligibilityMap[emp.id] ?? (emp.isEligible ?? true);
       const basePay = emp.salary_type === 'يومي' 
         ? (summary.actualAttendanceDays * dailyRate) 
-        : (isEligible ? emp.salary_amount : 0); // الشرط الجديد للموظف الشهري
+        : (isEligible ? emp.salary_amount : 0);
       const totalOvertimePay = summary.totalOvertimeValue;
       const totalAllowances = [emp.transport_allowance, emp.expatriation_allowance, emp.meal_allowance, emp.housing_allowance]
         .reduce((acc, allowance) => {
@@ -172,22 +172,10 @@ export default function Payroll() {
       const netSalary = basePay + totalOvertimePay + totalAllowances + manualBonus + generalBonusValue - manualDeduction - loanInstallment;
       
       return { 
-        employee: {
-          id: emp.id,
-          name: emp.name,
-          work_location: emp.work_location,
-          payment_source: emp.payment_source
-        },
-        basePay, 
-        totalWorkDays: summary.actualAttendanceDays, 
-        totalOvertimePay, 
-        totalBonuses: manualBonus, 
-        totalAllowances, 
-        manualDeduction, 
-        generalBonus: generalBonusValue, 
-        loanInstallment, 
-        netSalary,
-        isEligible // إضافة isEligible لـ PayrollReportItem
+        employee: { id: emp.id, name: emp.name, work_location: emp.work_location, payment_source: emp.payment_source },
+        basePay, totalWorkDays: summary.actualAttendanceDays, totalOvertimePay, 
+        totalBonuses: manualBonus, totalAllowances, manualDeduction, generalBonus: generalBonusValue, 
+        loanInstallment, netSalary, isEligible
       };
     });
   }, [filteredEmployees, attendanceRecords, publicHolidays, payrollDays, bonusesDeductions, generalBonusDays, excludedEmployees, loans, selectedPeriod, eligibilityMap]);
@@ -215,7 +203,7 @@ export default function Payroll() {
     }
   };
 
-  const handleExportToExcel = () => { if (payrollData.length === 0) { alert('لا توجد بيانات لتصديرها.'); return; } const dataForExport = payrollData.map(data => ({ 'الاسم': data.employee.name, 'الموقع الأساسي': data.employee.work_location, 'جهة الصرف': data.employee.payment_source, 'أيام الحضور': data.totalWorkDays, 'الراتب الأساسي': data.basePay.toFixed(2), 'قيمة الإضافي': data.totalOvertimePay.toFixed(2), 'البدلات': data.totalAllowances.toFixed(2), 'المكافآت': data.totalBonuses.toFixed(2), 'المنحة العامة': data.generalBonus.toFixed(2), 'قسط السلفة': data.loanInstallment.toFixed(2), 'خصومات أخرى': data.manualDeduction.toFixed(2), 'صافي الراتب': data.netSalary.toFixed(2), 'مستحق للراتب': data.isEligible ? 'نعم' : 'لا' })); const ws = XLSX.utils.json_to_sheet(dataForExport); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "كشف الرواتب"); XLSX.writeFile(wb, `Payroll_${selectedPeriod.year}_${selectedPeriod.month}.xlsx`); };
+  const handleExportToExcel = () => { if (payrollData.length === 0) { alert('لا توجد بيانات لتصديرها.'); return; } const dataForExport = payrollData.map(data => ({ 'الاسم': data.employee.name, 'الموقع الأساسي': data.employee.work_location, 'جهة الصرف': data.employee.payment_source, 'أيام الحضور': data.totalWorkDays, 'الراتب الأساسي': data.basePay.toFixed(2), 'قيمة الإضافي': data.totalOvertimePay.toFixed(2), 'البدلات': data.totalAllowances.toFixed(2), 'مستحقات-مكافآت': data.totalBonuses.toFixed(2), 'المنحة العامة': data.generalBonus.toFixed(2), 'قسط السلفة': data.loanInstallment.toFixed(2), 'خصومات أخرى': data.manualDeduction.toFixed(2), 'صافي الراتب': data.netSalary.toFixed(2), 'مستحق للراتب': data.isEligible ? 'نعم' : 'لا' })); const ws = XLSX.utils.json_to_sheet(dataForExport); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "كشف الرواتب"); XLSX.writeFile(wb, `Payroll_${selectedPeriod.year}_${selectedPeriod.month}.xlsx`); };
   
   if (loading) { return <div className="flex justify-center items-center h-screen"><Loader className="animate-spin text-blue-500" size={48} /></div>; }
   
@@ -248,7 +236,7 @@ export default function Payroll() {
           </div>
           <div className="overflow-x-auto">
               <table className="min-w-full table-auto border text-sm">
-                  <thead className="bg-gray-100"><tr className="text-xs text-gray-600 uppercase"><th className="border p-2">الاسم</th><th className="border p-2">الموقع</th><th className="border p-2">جهة الصرف</th><th className="border p-2">أيام الحضور</th><th className="border p-2">الراتب الأساسي</th><th className="border p-2">قيمة الإضافي</th><th className="border p-2">البدلات</th><th className="border p-2">المكافآت</th><th className="border p-2">المنحة</th><th className="border p-2">قسط السلفة</th><th className="border p-2">خصومات</th><th className="border p-2">صافي الراتب</th><th className="border p-2">إدارة</th><th className="border p-2">استثناء</th><th className="border p-2">مستحق للراتب</th></tr></thead>
+                  <thead className="bg-gray-100"><tr className="text-xs text-gray-600 uppercase"><th className="border p-2">الاسم</th><th className="border p-2">الموقع</th><th className="border p-2">جهة الصرف</th><th className="border p-2">أيام الحضور</th><th className="border p-2">الراتب الأساسي</th><th className="border p-2">قيمة الإضافي</th><th className="border p-2">البدلات</th><th className="border p-2">مستحقات-مكافآت</th><th className="border p-2">المنحة</th><th className="border p-2">قسط السلفة</th><th className="border p-2">خصومات</th><th className="border p-2">صافي الراتب</th><th className="border p-2">إدارة</th><th className="border p-2">استثناء</th><th className="border p-2">مستحق للراتب</th></tr></thead>
                   <tbody>
                       {payrollData.map((data) => {
                         const emp = employees.find(e => e.id === data.employee.id);
@@ -265,7 +253,7 @@ export default function Payroll() {
                               <td>
                                 <input
                                   type="checkbox"
-                                  checked={eligibilityMap[data.employee.id] ?? (emp?.isEligible ?? true)} // استخدام isEligible من الـ emp object
+                                  checked={eligibilityMap[data.employee.id] ?? (emp?.isEligible ?? true)}
                                   onChange={(e) => {
                                     setEligibilityMap(prev => ({
                                       ...prev,
@@ -300,5 +288,3 @@ export default function Payroll() {
     </div>
   );
 }
-
-// --- END OF FILE src/pages/Payroll.tsx ---

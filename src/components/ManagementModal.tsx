@@ -45,13 +45,15 @@ export default function ManagementModal({ employee, periodKey, existingRecord, o
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
             <div className="bg-white p-8 rounded-lg shadow-2xl w-full max-w-md animate-fade-in-down" dir="rtl">
                 <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-2xl font-bold text-gray-800">إدارة مستحقات وخصومات</h2>
+                    {/* --- التعديل الأول هنا --- */}
+                    <h2 className="text-2xl font-bold text-gray-800">إدارة المستحقات/المكافآت والخصومات</h2>
                     <button onClick={onClose} className="text-gray-500 hover:text-gray-800"><X size={28} /></button>
                 </div>
                 <p className="text-lg mb-6">الموظف: <span className="font-semibold text-blue-700">{employee.name}</span></p>
                 <div className="space-y-6">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">المكافآت (مبلغ)</label>
+                        {/* --- التعديل الثاني هنا --- */}
+                        <label className="block text-sm font-medium text-gray-700 mb-1">مستحقات - مكافآت (مبلغ)</label>
                         <input type="number" value={bonus} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setBonus(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
                     </div>
                     <div>

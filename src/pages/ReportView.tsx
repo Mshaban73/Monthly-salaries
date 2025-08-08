@@ -58,7 +58,7 @@ export default function ReportView() {
         'الراتب الأساسي': item.basePay,
         'قيمة الإضافي': item.totalOvertimePay,
         'البدلات': item.totalAllowances,
-        'المكافآت': item.totalBonuses,
+        'مستحقات-مكافآت': item.totalBonuses,
         'المنحة العامة': item.generalBonus,
         'قسط السلفة': item.loanInstallment,
         'خصومات أخرى': item.manualDeduction,
@@ -113,7 +113,9 @@ export default function ReportView() {
             <ChevronLeft size={20} />
             العودة للسجل
           </Link>
-          <h1 className="text-3xl font-bold">كشف رواتب شهر: {month}/{year}</h1>
+          <h1 className="text-3xl font-bold">
+            كشف رواتب شهر: {year && month ? new Date(Number(year), Number(month) - 1).toLocaleString('ar-EG', { month: 'long', year: 'numeric' }) : ''}
+          </h1>
         </div>
         <button onClick={handleExport} className="flex items-center bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700">
             <FileDown size={18} className="ml-2" />
@@ -133,7 +135,7 @@ export default function ReportView() {
                 <th className="py-2 px-3 border">الأساسي</th>
                 <th className="py-2 px-3 border">الإضافي</th>
                 <th className="py-2 px-3 border">البدلات</th>
-                <th className="py-2 px-3 border">المكافآت</th>
+                <th className="py-2 px-3 border">مستحقات-مكافآت</th>
                 <th className="py-2 px-3 border">المنحة</th>
                 <th className="py-2 px-3 border">السلفة</th>
                 <th className="py-2 px-3 border">الخصومات</th>
