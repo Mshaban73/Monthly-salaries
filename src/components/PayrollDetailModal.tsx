@@ -1,4 +1,4 @@
-// --- START OF FILE src/components/PayrollDetailModal.tsx (النسخة النهائية مع أيام الإضافي) ---
+// --- START OF FILE src/components/PayrollDetailModal.tsx (النسخة النهائية مع الحساب الصحيح لأيام الإضافي) ---
 
 import React, { useRef } from 'react';
 import { X, Printer } from 'lucide-react';
@@ -45,7 +45,6 @@ export default function PayrollDetailModal({ reportItem, onClose, year, month }:
         }
     };
     
-    // --- التعديل هنا: إضافة overtimeDaysCount ---
     const { employee, basePay, totalOvertimePay, totalAllowances, totalBonuses, generalBonus, loanInstallment, manualDeduction, netSalary, totalWorkDays, overtimeDaysCount } = reportItem;
 
     const totalAdditions = totalOvertimePay + totalAllowances + totalBonuses + generalBonus;
@@ -66,12 +65,11 @@ export default function PayrollDetailModal({ reportItem, onClose, year, month }:
                             </h2>
                             <p className="text-lg text-blue-700 font-semibold">{employee.name}</p>
                         </div>
-                        {/* --- بداية التعديل: إضافة أيام الإضافي --- */}
                         <div className="text-center">
                             <p className="text-sm text-gray-500">أيام الحضور: <span className="font-bold">{totalWorkDays}</span></p>
-                            <p className="text-sm text-gray-500 mt-1">أيام الإضافي: <span className="font-bold text-orange-600">{overtimeDaysCount || 0}</span></p>
+                            {/* --- التعديل هنا: استخدام toFixed(1) لعرض الكسور --- */}
+                            <p className="text-sm text-gray-500 mt-1">أيام الإضافي: <span className="font-bold text-orange-600">{(overtimeDaysCount || 0).toFixed(1)}</span></p>
                         </div>
-                        {/* --- نهاية التعديل --- */}
                     </div>
                     
                     <div className="border rounded-lg overflow-hidden">
