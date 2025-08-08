@@ -1,8 +1,8 @@
-// --- START OF FILE src/utils/fullAttendanceCalculator.ts (النسخة النهائية بالمنطق الصحيح المباشر) ---
+// --- START OF FILE src/utils/fullAttendanceCalculator.ts (النسخة الأصلية المستعادة) ---
 
 import { toYMDString } from './attendanceCalculator.ts';
 
-type Employee = any;
+type Employee = any; 
 type BonusDeduction = any;
 type AttendanceRecords = { [date: string]: { [employeeId: number]: { hours: number; locations: string[]; } } };
 type PublicHoliday = { date: string; name: string; };
@@ -11,80 +11,54 @@ const dayNameToIndex: { [key: string]: number } = { 'الأحد': 0, 'الإثن
 
 export const calculateAttendanceSummary = (employee: Employee, attendanceRecords: AttendanceRecords, publicHolidays: PublicHoliday[], payrollDays: Date[]) => {
   let actualAttendanceDays = 0;
-  
-  // ملخصات ساعات الإضافي الفعلية لكل نوع
   let weekdayOvertime = { rawHours: 0, calculatedValue: 0 };
   let thursdayOvertime = { rawHours: 0, calculatedValue: 0 };
   let restDayOvertime = { rawHours: 0, calculatedValue: 0 };
   let holidayOvertime = { rawHours: 0, calculatedValue: 0 };
-
-  const hoursInWorkDay = employee.hours_per_day || 8;
-  const dailyRate = employee.salary_type === 'شهري' ? (employee.salary_amount / 30) : employee.salary_amount;
-  const hourlyRate = dailyRate / hoursInWorkDay;
+  let totalRawOvertimeHours = 0;
   
-  const regularOvertimeRate = employee.overtime_rate_regular || 1.5;
-  const holidayOvertimeRate = employee.overtime_rate_holiday || 2;
-  const restDayOvertimeRate = employee.overtime_rate_friday || 2;
+  const dailyRate = employee.salary_type === 'شهري' ? (employee.salary_amount / 30) : employee.salary_amount;
+  const hourlyRate = dailyRate / (employee.hours_per_day || 8);
 
   payrollDays.forEach(day => {
     const dateStr = toYMDString(day);
     const record = attendanceRecords[dateStr]?.[employee.id];
 
-    if (!record || record.hours <= 0) {
-      return;
-    }
-
-    actualAttendanceDays++;
-    
-    const dayOfWeekJS = day.getUTCDay();
-    const dayNameArabic = Object.keys(dayNameToIndex).find(key => dayNameToIndex[key] === dayOfWeekJS) || '';
-    
-    const isHoliday = publicHolidays.some(h => h.date === dateStr);
-    const isRestDay = (employee.rest_days || []).includes(dayNameArabic);
-
-    if (isHoliday) {
-      holidayOvertime.rawHours += record.hours;
-      holidayOvertime.calculatedValue += record.hours * holidayOvertimeRate;
-    } else if (isRestDay) {
-      restDayOvertime.rawHours += record.hours;
-      restDayOvertime.calculatedValue += record.hours * restDayOvertimeRate;
-    } else {
-      let workHoursLimit = hoursInWorkDay;
-      if (dayNameArabic === 'الخميس' && employee.is_head_office) {
-        workHoursLimit = 3;
-      }
+    if (record && record.hours > 0) {
+      actualAttendanceDays++;
       
-      const overtimeHours = Math.max(0, record.hours - workHoursLimit);
-      if (dayNameArabic === 'الخميس' && employee.is_head_office) {
-          thursdayOvertime.rawHours += overtimeHours;
+      const dayOfWeekJS = day.getUTCDay();
+      const dayNameArabic = Object.keys(dayNameToIndex).find(key => dayNameToIndex[key] === dayOfWeekJS);
+      
+      const isRestDay = (employee.rest_days || []).includes(dayNameArabic || '');
+      const isHoliday = publicHolidays.some(h => h.date === dateStr);
+      
+      const overtimeHours = Math.max(0, record.hours - employee.hours_per_day);
+      totalRawOvertimeHours += overtimeHours;
+
+      if (isHoliday) {
+        holidayOvertime.rawHours += record.hours;
+        holidayOvertime.calculatedValue += record.hours * 2;
+      } else if (isRestDay) {
+        restDayOvertime.rawHours += record.hours;
+        restDayOvertime.calculatedValue += record.hours * 2;
+      } else if (dayNameArabic === 'الخميس' && employee.is_head_office) {
+        const thursdayOvertimeHours = Math.max(0, record.hours - 3); 
+        thursdayOvertime.rawHours += thursdayOvertimeHours;
+        thursdayOvertime.calculatedValue += thursdayOvertimeHours * 1.5;
       } else {
-          weekdayOvertime.rawHours += overtimeHours;
+        weekdayOvertime.rawHours += overtimeHours;
+        weekdayOvertime.calculatedValue += overtimeHours * 1.5;
       }
-      weekdayOvertime.calculatedValue += overtimeHours * regularOvertimeRate; // نفترض نفس المعدل للخميس والعادي
     }
   });
-
+  
   const totalOvertimeValueInHours = (weekdayOvertime.calculatedValue + thursdayOvertime.calculatedValue + restDayOvertime.calculatedValue + holidayOvertime.calculatedValue);
   const totalOvertimeValue = totalOvertimeValueInHours * hourlyRate;
 
-  // --- التعديل الأساسي والنهائي هنا ---
-  const totalRawOvertimeHours = weekdayOvertime.rawHours + thursdayOvertime.rawHours + restDayOvertime.rawHours + holidayOvertime.rawHours;
-  const overtimeDaysCount = totalRawOvertimeHours / hoursInWorkDay;
-  // --- نهاية التعديل ---
-
-  return { 
-    actualAttendanceDays, 
-    weekdayOvertime, 
-    thursdayOvertime, 
-    restDayOvertime, 
-    holidayOvertime, 
-    totalOvertimeValue, 
-    totalRawOvertimeHours, // نرجع المجموع الكلي للساعات أيضاً
-    overtimeDaysCount 
-  };
+  return { actualAttendanceDays, weekdayOvertime, thursdayOvertime, restDayOvertime, holidayOvertime, totalOvertimeValue, totalRawOvertimeHours };
 };
 
-// ... باقي الدوال في الملف تبقى كما هي (بدون تغيير) ...
 export const calculateLocationSummary = (employee: Employee, attendanceRecords: AttendanceRecords, payrollDays: Date[]) => {
   const summary: { [key: string]: number } = {};
   payrollDays.forEach(day => {
@@ -99,6 +73,7 @@ export const calculateLocationSummary = (employee: Employee, attendanceRecords: 
   });
   return summary;
 };
+
 export const calculateCostDistribution = (
     employee: Employee, 
     attendanceRecords: AttendanceRecords, 

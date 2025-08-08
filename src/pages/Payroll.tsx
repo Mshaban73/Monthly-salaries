@@ -1,4 +1,4 @@
-// --- START OF FILE src/pages/Payroll.tsx (النسخة النهائية مع الحساب الصحيح لأيام الإضافي) ---
+// --- START OF FILE src/pages/Payroll.tsx (النسخة النهائية مع الحساب الصحيح والمباشر) ---
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -143,13 +143,11 @@ export default function Payroll() {
       const summary = calculateAttendanceSummary(emp, attendanceRecords, publicHolidays, payrollDays);
       
       // --- بداية التعديل النهائي والحاسم ---
-      // 1. نجمع إجمالي ساعات الإضافي الفعلية من الملخص الذي تم حسابه
       const totalRawOvertimeHours = (summary.weekdayOvertime?.rawHours || 0) + 
                                   (summary.thursdayOvertime?.rawHours || 0) + 
                                   (summary.restDayOvertime?.rawHours || 0) + 
                                   (summary.holidayOvertime?.rawHours || 0);
 
-      // 2. نحسب مكافئ الأيام بالقسمة على عدد ساعات يوم العمل
       const hoursInWorkDay = emp.hours_per_day || 8;
       const overtimeDaysCount = totalRawOvertimeHours / hoursInWorkDay;
       // --- نهاية التعديل ---
@@ -188,7 +186,7 @@ export default function Payroll() {
         employee: { id: emp.id, name: emp.name, work_location: emp.work_location, payment_source: emp.payment_source },
         basePay, 
         totalWorkDays: summary.actualAttendanceDays,
-        overtimeDaysCount: overtimeDaysCount, // <-- استخدام القيمة الجديدة المحسوبة هنا
+        overtimeDaysCount: overtimeDaysCount, 
         totalOvertimePay, 
         totalBonuses: manualBonus, 
         totalAllowances, 
