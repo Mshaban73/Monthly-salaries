@@ -171,12 +171,22 @@ export default function Payroll() {
       const loanInstallment = activeLoan ? (activeLoan.total_amount / activeLoan.installments) : 0;
       const netSalary = basePay + totalOvertimePay + totalAllowances + manualBonus + generalBonusValue - manualDeduction - loanInstallment;
       
+      // --- بداية التعديل ---
       return { 
         employee: { id: emp.id, name: emp.name, work_location: emp.work_location, payment_source: emp.payment_source },
-        basePay, totalWorkDays: summary.actualAttendanceDays, totalOvertimePay, 
-        totalBonuses: manualBonus, totalAllowances, manualDeduction, generalBonus: generalBonusValue, 
-        loanInstallment, netSalary, isEligible
+        basePay, 
+        totalWorkDays: summary.actualAttendanceDays,
+        overtimeDaysCount: summary.overtimeDaysCount, // <-- إضافة القيمة الجديدة
+        totalOvertimePay, 
+        totalBonuses: manualBonus, 
+        totalAllowances, 
+        manualDeduction, 
+        generalBonus: generalBonusValue, 
+        loanInstallment, 
+        netSalary, 
+        isEligible
       };
+      // --- نهاية التعديل ---
     });
   }, [filteredEmployees, attendanceRecords, publicHolidays, payrollDays, bonusesDeductions, generalBonusDays, excludedEmployees, loans, selectedPeriod, eligibilityMap]);
 

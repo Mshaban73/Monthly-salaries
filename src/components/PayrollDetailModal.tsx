@@ -1,4 +1,4 @@
-// --- START OF FILE src/components/PayrollDetailModal.tsx (نسخة محسنة مع الأنواع والتعديلات المطلوبة) ---
+// --- START OF FILE src/components/PayrollDetailModal.tsx (النسخة النهائية مع أيام الإضافي) ---
 
 import React, { useRef } from 'react';
 import { X, Printer } from 'lucide-react';
@@ -19,16 +19,14 @@ const DetailRow: React.FC<DetailRowProps> = ({ label, value, colorClass = 'text-
     </div>
 );
 
-// --- بداية التعديل 1: تحديث واجهة الـ props ---
 interface PayrollDetailModalProps {
     reportItem: any;
     onClose: () => void;
-    year: string;  // استقبال السنة
-    month: string; // استقبال الشهر
+    year: string;
+    month: string;
 }
 
 export default function PayrollDetailModal({ reportItem, onClose, year, month }: PayrollDetailModalProps) {
-// --- نهاية التعديل 1 ---
     const modalContentRef = useRef<HTMLDivElement>(null);
 
     if (!reportItem) return null;
@@ -47,7 +45,8 @@ export default function PayrollDetailModal({ reportItem, onClose, year, month }:
         }
     };
     
-    const { employee, basePay, totalOvertimePay, totalAllowances, totalBonuses, generalBonus, loanInstallment, manualDeduction, netSalary, totalWorkDays } = reportItem;
+    // --- التعديل هنا: إضافة overtimeDaysCount ---
+    const { employee, basePay, totalOvertimePay, totalAllowances, totalBonuses, generalBonus, loanInstallment, manualDeduction, netSalary, totalWorkDays, overtimeDaysCount } = reportItem;
 
     const totalAdditions = totalOvertimePay + totalAllowances + totalBonuses + generalBonus;
     const totalDeductions = loanInstallment + manualDeduction;
@@ -62,31 +61,29 @@ export default function PayrollDetailModal({ reportItem, onClose, year, month }:
                 <div ref={modalContentRef} className="p-6">
                     <div className="flex justify-between items-center mb-3">
                         <div>
-                            {/* --- بداية التعديل 2: تحديث العنوان --- */}
                             <h2 className="text-xl font-bold text-gray-800">
                                 تفاصيل راتب - {new Date(Number(year), Number(month) - 1).toLocaleString('ar-EG', { month: 'long', year: 'numeric' })}
                             </h2>
-                            {/* --- نهاية التعديل 2 --- */}
                             <p className="text-lg text-blue-700 font-semibold">{employee.name}</p>
                         </div>
-                        <span className="text-sm text-gray-500">أيام الحضور: {totalWorkDays}</span>
+                        {/* --- بداية التعديل: إضافة أيام الإضافي --- */}
+                        <div className="text-center">
+                            <p className="text-sm text-gray-500">أيام الحضور: <span className="font-bold">{totalWorkDays}</span></p>
+                            <p className="text-sm text-gray-500 mt-1">أيام الإضافي: <span className="font-bold text-orange-600">{overtimeDaysCount || 0}</span></p>
+                        </div>
+                        {/* --- نهاية التعديل --- */}
                     </div>
                     
                     <div className="border rounded-lg overflow-hidden">
                         <DetailRow label="الراتب الأساسي" value={basePay.toFixed(2)} colorClass="text-gray-800" />
-                        
                         <div className="bg-green-50"><DetailRow label="قيمة الإضافي" value={totalOvertimePay.toFixed(2)} colorClass="text-green-700" /></div>
                         <div className="bg-green-50"><DetailRow label="البدلات" value={totalAllowances.toFixed(2)} colorClass="text-green-700" /></div>
-                        {/* --- بداية التعديل 3: تغيير المسمى --- */}
                         <div className="bg-green-50"><DetailRow label="مستحقات-مكافآت" value={totalBonuses.toFixed(2)} colorClass="text-green-700" /></div>
-                        {/* --- نهاية التعديل 3 --- */}
                         <div className="bg-green-50"><DetailRow label="المنحة العامة" value={generalBonus.toFixed(2)} colorClass="text-green-700" /></div>
                         <DetailRow label="إجمالي المستحقات" value={(basePay + totalAdditions).toFixed(2)} colorClass="text-green-800 font-extrabold" isBold />
-                        
                         <div className="bg-red-50"><DetailRow label="قسط السلفة" value={loanInstallment.toFixed(2)} colorClass="text-red-700" /></div>
                         <div className="bg-red-50"><DetailRow label="الخصومات الأخرى" value={manualDeduction.toFixed(2)} colorClass="text-red-700" /></div>
                         <DetailRow label="إجمالي الاستقطاعات" value={totalDeductions.toFixed(2)} colorClass="text-red-800 font-extrabold" isBold />
-                        
                         <div className="bg-blue-600 text-white">
                            <DetailRow label="صافي الراتب النهائي" value={netSalary.toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' })} colorClass="text-white" isBold />
                         </div>

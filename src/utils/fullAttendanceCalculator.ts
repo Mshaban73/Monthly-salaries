@@ -1,15 +1,15 @@
-// --- START OF FILE src/utils/fullAttendanceCalculator.ts (النسخة النهائية النظيفة) ---
+// --- START OF FILE src/utils/fullAttendanceCalculator.ts ---
 
 import { toYMDString } from './attendanceCalculator.ts';
 
-// تعريف الأنواع بشكل أكثر تحديداً لتحسين الكود
-type Employee = any; // يمكنك استبداله بواجهة Employee الحقيقية
-type BonusDeduction = any; // يمكنك استبداله بواجهة BonusDeduction الحقيقية
+type Employee = any;
+type BonusDeduction = any;
 type AttendanceRecords = { [date: string]: { [employeeId: number]: { hours: number; locations: string[]; } } };
 type PublicHoliday = { date: string; name: string; };
 
 const dayNameToIndex: { [key: string]: number } = { 'الأحد': 0, 'الإثنين': 1, 'الثلاثاء': 2, 'الأربعاء': 3, 'الخميس': 4, 'الجمعة': 5, 'السبت': 6 };
 
+// --- بداية التعديل ---
 export const calculateAttendanceSummary = (employee: Employee, attendanceRecords: AttendanceRecords, publicHolidays: PublicHoliday[], payrollDays: Date[]) => {
   let actualAttendanceDays = 0;
   let weekdayOvertime = { rawHours: 0, calculatedValue: 0 };
@@ -17,13 +17,15 @@ export const calculateAttendanceSummary = (employee: Employee, attendanceRecords
   let restDayOvertime = { rawHours: 0, calculatedValue: 0 };
   let holidayOvertime = { rawHours: 0, calculatedValue: 0 };
   let totalRawOvertimeHours = 0;
-  
+  let overtimeDaysCount = 0; // <-- إضافة متغير جديد
+
   const dailyRate = employee.salary_type === 'شهري' ? (employee.salary_amount / 30) : employee.salary_amount;
   const hourlyRate = dailyRate / (employee.hours_per_day || 8);
 
   payrollDays.forEach(day => {
     const dateStr = toYMDString(day);
     const record = attendanceRecords[dateStr]?.[employee.id];
+    let hasOvertimeThisDay = false; // Flag to count day only once
 
     if (record && record.hours > 0) {
       actualAttendanceDays++;
@@ -35,22 +37,32 @@ export const calculateAttendanceSummary = (employee: Employee, attendanceRecords
       const isHoliday = publicHolidays.some(h => h.date === dateStr);
       
       const overtimeHours = Math.max(0, record.hours - employee.hours_per_day);
-      totalRawOvertimeHours += overtimeHours;
-
+      
       if (isHoliday) {
         holidayOvertime.rawHours += record.hours;
         holidayOvertime.calculatedValue += record.hours * 2;
+        totalRawOvertimeHours += record.hours;
+        if (record.hours > 0) hasOvertimeThisDay = true;
       } else if (isRestDay) {
         restDayOvertime.rawHours += record.hours;
         restDayOvertime.calculatedValue += record.hours * 2;
+        totalRawOvertimeHours += record.hours;
+        if (record.hours > 0) hasOvertimeThisDay = true;
       } else if (dayNameArabic === 'الخميس' && employee.is_head_office) {
-        // منطق خاص بالخميس لموظفي الإدارة
-        const thursdayOvertimeHours = Math.max(0, record.hours - 3); // 3 ساعات عمل
+        const thursdayOvertimeHours = Math.max(0, record.hours - 3);
         thursdayOvertime.rawHours += thursdayOvertimeHours;
         thursdayOvertime.calculatedValue += thursdayOvertimeHours * 1.5;
+        totalRawOvertimeHours += thursdayOvertimeHours;
+        if (thursdayOvertimeHours > 0) hasOvertimeThisDay = true;
       } else {
         weekdayOvertime.rawHours += overtimeHours;
         weekdayOvertime.calculatedValue += overtimeHours * 1.5;
+        totalRawOvertimeHours += overtimeHours;
+        if (overtimeHours > 0) hasOvertimeThisDay = true;
+      }
+
+      if (hasOvertimeThisDay) {
+        overtimeDaysCount++;
       }
     }
   });
@@ -58,8 +70,18 @@ export const calculateAttendanceSummary = (employee: Employee, attendanceRecords
   const totalOvertimeValueInHours = (weekdayOvertime.calculatedValue + thursdayOvertime.calculatedValue + restDayOvertime.calculatedValue + holidayOvertime.calculatedValue);
   const totalOvertimeValue = totalOvertimeValueInHours * hourlyRate;
 
-  return { actualAttendanceDays, weekdayOvertime, thursdayOvertime, restDayOvertime, holidayOvertime, totalOvertimeValue, totalRawOvertimeHours };
+  return { 
+    actualAttendanceDays, 
+    weekdayOvertime, 
+    thursdayOvertime, 
+    restDayOvertime, 
+    holidayOvertime, 
+    totalOvertimeValue, 
+    totalRawOvertimeHours,
+    overtimeDaysCount // <-- إرجاع القيمة الجديدة
+  };
 };
+// --- نهاية التعديل ---
 
 export const calculateLocationSummary = (employee: Employee, attendanceRecords: AttendanceRecords, payrollDays: Date[]) => {
   const summary: { [key: string]: number } = {};
@@ -76,7 +98,6 @@ export const calculateLocationSummary = (employee: Employee, attendanceRecords: 
   return summary;
 };
 
-// --- بداية التعديل: إزالة المعاملات غير المستخدمة ---
 export const calculateCostDistribution = (
     employee: Employee, 
     attendanceRecords: AttendanceRecords, 
@@ -87,7 +108,6 @@ export const calculateCostDistribution = (
     totalOvertimePay: number, 
     loanInstallment: number
 ) => {
-// --- نهاية التعديل ---
     const distribution: { [location: string]: any } = {};
     const locationSummary = calculateLocationSummary(employee, attendanceRecords, payrollDays);
     const totalWorkDays = Object.values(locationSummary).reduce((sum: number, days: number) => sum + days, 0);
@@ -99,7 +119,7 @@ export const calculateCostDistribution = (
     }
 
     Object.entries(locationSummary).forEach(([location, days]) => {
-        const daysRatio = totalWorkDays > 0 ? (days / totalWorkDays) : 0; // حماية من القسمة على صفر
+        const daysRatio = totalWorkDays > 0 ? (days / totalWorkDays) : 0;
         const bdRecord = bonuses.find(r => r.employee_id === employee.id);
         const dailyRate = employee.salary_type === 'شهري' ? (employee.salary_amount / 30) : employee.salary_amount;
         
@@ -108,7 +128,6 @@ export const calculateCostDistribution = (
         const allowancesCost = [employee.transport_allowance, employee.expatriation_allowance, employee.meal_allowance, employee.housing_allowance]
             .reduce((acc, allowance) => {
                 if (!allowance) return acc;
-                // البدلات اليومية تُحسب بعدد الأيام الفعلي في الموقع
                 const amount = (allowance.type === 'يومي' ? allowance.amount * days : (allowance.amount * daysRatio));
                 return acc + amount;
             }, 0);
