@@ -1,4 +1,4 @@
-// --- START OF FILE src/utils/fullAttendanceCalculator.ts (النسخة النهائية المصححة) ---
+// --- START OF FILE src/utils/fullAttendanceCalculator.ts (النسخة النهائية مع الحساب الصحيح لأيام الإضافي) ---
 
 import { toYMDString } from './attendanceCalculator.ts';
 
@@ -16,7 +16,7 @@ export const calculateAttendanceSummary = (employee: Employee, attendanceRecords
   let thursdayOvertime = { rawHours: 0, calculatedValue: 0 };
   let restDayOvertime = { rawHours: 0, calculatedValue: 0 };
   let holidayOvertime = { rawHours: 0, calculatedValue: 0 };
-  let totalRawOvertimeHours = 0; // هذا المتغير سيجمع كل ساعات الإضافي الفعلية
+  let totalRawOvertimeHours = 0; // سيجمع كل ساعات الإضافي الفعلية
   
   const dailyRate = employee.salary_type === 'شهري' ? (employee.salary_amount / 30) : employee.salary_amount;
   const hoursInWorkDay = employee.hours_per_day || 8;
@@ -36,19 +36,23 @@ export const calculateAttendanceSummary = (employee: Employee, attendanceRecords
       const isHoliday = publicHolidays.some(h => h.date === dateStr);
       
       if (isHoliday) {
+        // كل ساعات العمل في يوم العطلة تعتبر إضافي
         holidayOvertime.rawHours += record.hours;
         holidayOvertime.calculatedValue += record.hours * (employee.overtime_rate_holiday || 2);
-        totalRawOvertimeHours += record.hours; // كل الساعات تعتبر إضافي
+        totalRawOvertimeHours += record.hours;
       } else if (isRestDay) {
+        // كل ساعات العمل في يوم الراحة تعتبر إضافي
         restDayOvertime.rawHours += record.hours;
-        restDayOvertime.calculatedValue += record.hours * (employee.overtime_rate_friday || 2); // افترضنا أن rate الراحة هو نفس الجمعة
-        totalRawOvertimeHours += record.hours; // كل الساعات تعتبر إضافي
+        restDayOvertime.calculatedValue += record.hours * (employee.overtime_rate_friday || 2);
+        totalRawOvertimeHours += record.hours;
       } else if (dayNameArabic === 'الخميس' && employee.is_head_office) {
+        // ساعات الإضافي بعد 3 ساعات عمل
         const thursdayOvertimeHours = Math.max(0, record.hours - 3);
         thursdayOvertime.rawHours += thursdayOvertimeHours;
         thursdayOvertime.calculatedValue += thursdayOvertimeHours * (employee.overtime_rate_regular || 1.5);
         totalRawOvertimeHours += thursdayOvertimeHours;
       } else {
+        // ساعات الإضافي بعد ساعات العمل اليومية
         const overtimeHours = Math.max(0, record.hours - hoursInWorkDay);
         weekdayOvertime.rawHours += overtimeHours;
         weekdayOvertime.calculatedValue += overtimeHours * (employee.overtime_rate_regular || 1.5);
@@ -61,7 +65,7 @@ export const calculateAttendanceSummary = (employee: Employee, attendanceRecords
   const totalOvertimeValue = totalOvertimeValueInHours * hourlyRate;
 
   // --- التعديل الأساسي هنا ---
-  // حساب عدد أيام الإضافي بناءً على إجمالي الساعات مقسومة على ساعات اليوم
+  // حساب عدد أيام الإضافي بناءً على "إجمالي الساعات الفعلية" مقسومة على ساعات اليوم
   const overtimeDaysCount = totalRawOvertimeHours / hoursInWorkDay;
 
   return { 
@@ -76,7 +80,6 @@ export const calculateAttendanceSummary = (employee: Employee, attendanceRecords
   };
 };
 
-// ... باقي الدوال في الملف تبقى كما هي ...
 export const calculateLocationSummary = (employee: Employee, attendanceRecords: AttendanceRecords, payrollDays: Date[]) => {
   const summary: { [key: string]: number } = {};
   payrollDays.forEach(day => {
@@ -91,6 +94,7 @@ export const calculateLocationSummary = (employee: Employee, attendanceRecords: 
   });
   return summary;
 };
+
 export const calculateCostDistribution = (
     employee: Employee, 
     attendanceRecords: AttendanceRecords, 
