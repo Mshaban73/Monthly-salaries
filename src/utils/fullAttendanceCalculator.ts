@@ -1,4 +1,4 @@
-// --- START OF FILE src/utils/fullAttendanceCalculator.ts (النسخة النهائية بالمنطق الصحيح 100%) ---
+// --- START OF FILE src/utils/fullAttendanceCalculator.ts (النسخة الكاملة والصحيحة 100%) ---
 
 import { toYMDString } from './attendanceCalculator.ts';
 
@@ -70,10 +70,7 @@ export const calculateAttendanceSummary = (employee: Employee, attendanceRecords
   
   totalRawOvertimeHours = weekdayOvertime.rawHours + thursdayOvertime.rawHours + restDayOvertime.rawHours + holidayOvertime.rawHours;
 
-  // --- التعديل النهائي والحاسم هنا ---
-  // نجمع الساعات "المحسوبة" (الموزونة) بدلاً من الساعات الخام
   const overtimeDaysCount = totalOvertimeValueInCalculatedHours / hoursInWorkDay;
-  // --- نهاية التعديل ---
 
   return { 
     actualAttendanceDays, 
@@ -87,14 +84,67 @@ export const calculateAttendanceSummary = (employee: Employee, attendanceRecords
   };
 };
 
-// ... باقي الدوال في الملف تبقى كما هي ...
 export const calculateLocationSummary = (employee: Employee, attendanceRecords: AttendanceRecords, payrollDays: Date[]) => {
   const summary: { [key: string]: number } = {};
-  payrollDays.forEach(day => { /* ... */ });
+  payrollDays.forEach(day => {
+      const dateStr = toYMDString(day);
+      const record = attendanceRecords[dateStr]?.[employee.id];
+      if (record?.hours && record.hours > 0) {
+          const locations = record.locations && record.locations.length > 0 ? record.locations : [employee.work_location || 'غير محدد'];
+          locations.forEach(location => {
+            summary[location] = (summary[location] || 0) + (1 / locations.length);
+          });
+      }
+  });
   return summary;
 };
-export const calculateCostDistribution = (employee: Employee, /* ... */ ) => {
+
+export const calculateCostDistribution = (
+    employee: Employee, 
+    attendanceRecords: AttendanceRecords, 
+    payrollDays: Date[], 
+    bonuses: BonusDeduction[], 
+    excludedEmployees: Set<number>, 
+    generalBonusDays: number, 
+    totalOvertimePay: number, 
+    loanInstallment: number
+) => {
     const distribution: { [location: string]: any } = {};
-    /* ... */
+    const locationSummary = calculateLocationSummary(employee, attendanceRecords, payrollDays);
+    const totalWorkDays = Object.values(locationSummary).reduce((sum: number, days: number) => sum + days, 0);
+
+    if (totalWorkDays === 0 && employee.salary_type === 'شهري') {
+        const location = employee.work_location || 'غير محدد';
+        distribution[location] = { days: 0, baseCost: employee.salary_amount, allowancesCost: 0, otherAdditions: 0, totalDeductions: 0, netCost: employee.salary_amount };
+        return distribution;
+    }
+
+    Object.entries(locationSummary).forEach(([location, days]) => {
+        const daysRatio = totalWorkDays > 0 ? (days / totalWorkDays) : 0;
+        const bdRecord = bonuses.find(r => r.employee_id === employee.id);
+        const dailyRate = employee.salary_type === 'شهري' ? (employee.salary_amount / 30) : employee.salary_amount;
+        
+        const baseCost = employee.salary_type === 'يومي' ? (days * dailyRate) : (employee.salary_amount * daysRatio);
+        
+        const allowancesCost = [employee.transport_allowance, employee.expatriation_allowance, employee.meal_allowance, employee.housing_allowance]
+            .reduce((acc, allowance) => {
+                if (!allowance) return acc;
+                const amount = (allowance.type === 'يومي' ? allowance.amount * days : (allowance.amount * daysRatio));
+                return acc + amount;
+            }, 0);
+        
+        const manualBonus = (bdRecord?.bonus_amount || 0) * daysRatio;
+        const generalBonusValue = excludedEmployees.has(employee.id) ? 0 : (generalBonusDays * dailyRate * daysRatio);
+        const otherAdditions = manualBonus + generalBonusValue + (totalOvertimePay * daysRatio);
+
+        const manualDeduction = (bdRecord?.deduction_amount || 0) * daysRatio;
+        const distributedLoanInstallment = loanInstallment * daysRatio;
+        const totalDeductions = manualDeduction + distributedLoanInstallment;
+        
+        const netCost = baseCost + allowancesCost + otherAdditions - totalDeductions;
+        
+        distribution[location] = { days, baseCost, allowancesCost, otherAdditions, totalDeductions, netCost };
+    });
+
     return distribution;
 };
