@@ -1,4 +1,4 @@
-// --- START OF FILE src/utils/fullAttendanceCalculator.ts (النسخة الكاملة والصحيحة 100%) ---
+// --- START OF FILE src/utils/fullAttendanceCalculator.ts (النسخة النهائية بالمنطق الصحيح 100%) ---
 
 import { toYMDString } from './attendanceCalculator.ts';
 
@@ -65,12 +65,19 @@ export const calculateAttendanceSummary = (employee: Employee, attendanceRecords
     }
   });
 
+  // هذا السطر يجمع القيم الموزونة (الأرقام الكبيرة)
   const totalOvertimeValueInCalculatedHours = (weekdayOvertime.calculatedValue + thursdayOvertime.calculatedValue + restDayOvertime.calculatedValue + holidayOvertime.calculatedValue);
+  
+  // هذا السطر يحسب القيمة المالية
   const totalOvertimeValue = totalOvertimeValueInCalculatedHours * hourlyRate;
   
+  // هذا السطر يجمع الساعات الخام (للعرض في ملخص الحضور)
   totalRawOvertimeHours = weekdayOvertime.rawHours + thursdayOvertime.rawHours + restDayOvertime.rawHours + holidayOvertime.rawHours;
 
+  // --- التعديل النهائي والحاسم هنا ---
+  // نقسم مجموع الساعات الموزونة على 8 لنحصل على الأيام المكافئة
   const overtimeDaysCount = totalOvertimeValueInCalculatedHours / hoursInWorkDay;
+  // --- نهاية التعديل ---
 
   return { 
     actualAttendanceDays, 
@@ -84,6 +91,7 @@ export const calculateAttendanceSummary = (employee: Employee, attendanceRecords
   };
 };
 
+// ... باقي الدوال في الملف تبقى كما هي ...
 export const calculateLocationSummary = (employee: Employee, attendanceRecords: AttendanceRecords, payrollDays: Date[]) => {
   const summary: { [key: string]: number } = {};
   payrollDays.forEach(day => {
