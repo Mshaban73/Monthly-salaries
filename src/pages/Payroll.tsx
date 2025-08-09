@@ -1,4 +1,4 @@
-// --- START OF FILE src/pages/Payroll.tsx (النسخة النهائية مع الحساب الصحيح والمباشر) ---
+// --- START OF FILE src/pages/Payroll.tsx (النسخة الكاملة والصحيحة والنهائية) ---
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -141,24 +141,21 @@ export default function Payroll() {
     const bonusDays = Number(generalBonusDays) || 0;
     return filteredEmployees.map(emp => {
       const summary = calculateAttendanceSummary(emp, attendanceRecords, publicHolidays, payrollDays);
-      
-      // --- بداية التعديل النهائي والحاسم ---
-      const totalRawOvertimeHours = (summary.weekdayOvertime?.rawHours || 0) + 
-                                  (summary.thursdayOvertime?.rawHours || 0) + 
-                                  (summary.restDayOvertime?.rawHours || 0) + 
-                                  (summary.holidayOvertime?.rawHours || 0);
-
-      const hoursInWorkDay = emp.hours_per_day || 8;
-      const overtimeDaysCount = totalRawOvertimeHours / hoursInWorkDay;
-      // --- نهاية التعديل ---
-
       const bdRecord = bonusesDeductions.find(r => r.employee_id === emp.id);
+      
       const dailyRate = emp.salary_type === 'شهري' ? (emp.salary_amount / 30) : emp.salary_amount;
+      const totalOvertimePay = summary.totalOvertimeValue;
+      
+      // --- المعادلة الصحيحة التي طلبتها ---
+      // (قيمة الإضافي) / (أجر اليوم)
+      const overtimeDaysCount = dailyRate > 0 ? (totalOvertimePay / dailyRate) : 0;
+      // --- نهاية المعادلة ---
+
       const isEligible = eligibilityMap[emp.id] ?? (emp.isEligible ?? true);
       const basePay = emp.salary_type === 'يومي' 
         ? (summary.actualAttendanceDays * dailyRate) 
         : (isEligible ? emp.salary_amount : 0);
-      const totalOvertimePay = summary.totalOvertimeValue;
+      
       const totalAllowances = [emp.transport_allowance, emp.expatriation_allowance, emp.meal_allowance, emp.housing_allowance]
         .reduce((acc, allowance) => {
           if (!allowance) return acc;
