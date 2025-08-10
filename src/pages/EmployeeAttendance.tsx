@@ -1,4 +1,4 @@
-// --- START OF FILE src/pages/EmployeeAttendance.tsx (كامل ومع التعديلات الصحيحة) ---
+// --- START OF FILE src/pages/EmployeeAttendance.tsx (مصَحح لمنطق الخميس) ---
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
@@ -55,9 +55,7 @@ export default function EmployeeAttendance() {
 
         const [attRes, holRes, locRes] = await Promise.all([
             supabase.from('attendance').select('*').eq('employee_id', employeeId).gte('date', startDate).lte('date', endDate),
-            // --- بداية التعديل: طلب كل الحقول (*) بدلاً من حقول محددة ---
             supabase.from('public_holidays').select('*').gte('date', startDate).lte('date', endDate),
-            // --- نهاية التعديل ---
             supabase.from('employees').select('work_location')
         ]);
         
@@ -93,7 +91,6 @@ export default function EmployeeAttendance() {
         const recordsToUpsert = Object.entries(attendance)
             .map(([date, details]) => {
                 const hours = parseFloat(details.hours);
-                // تعديل بسيط: التأكد من أن `details` موجود قبل الوصول إلى خصائصه
                 if (details && ((!isNaN(hours) && hours >= 0) || (details.location && details.location !== employee.work_location))) {
                     return {
                         employee_id: employee.id,
@@ -105,7 +102,7 @@ export default function EmployeeAttendance() {
                 }
                 return null;
             })
-            .filter((record): record is NonNullable<typeof record> => record !== null); // تحسين النوع للحماية
+            .filter((record): record is NonNullable<typeof record> => record !== null);
 
         if (recordsToUpsert.length > 0) {
             const { error } = await supabase.from('attendance').upsert(recordsToUpsert, {
@@ -124,6 +121,7 @@ export default function EmployeeAttendance() {
         fetchData();
     };
     
+    // --- بداية التصحيح ---
     const handleAutoFill = () => {
         if (!employee) return;
 
@@ -136,8 +134,21 @@ export default function EmployeeAttendance() {
                 const isRestDay = (employee.rest_days || []).includes(dayNameArabic || '');
                 const isHoliday = publicHolidays.some(h => h.date === dateStr);
 
+                // املأ فقط الأيام التي ليست عطلة أو راحة
                 if (!isRestDay && !isHoliday) {
-                    const hoursToFill = (dayNameArabic === 'الخميس' && employee.is_head_office) ? '3' : employee.hours_per_day.toString();
+                    let hoursToFill = employee.hours_per_day.toString(); // القيمة الافتراضية
+                    
+                    // تحقق إذا كان اليوم هو الخميس
+                    if (dayNameArabic === 'الخميس') {
+                        // إذا كان موظف إدارة، الساعات 3
+                        if (employee.is_head_office) {
+                            hoursToFill = '3';
+                        } else {
+                        // إذا كان موظف موقع، الساعات 4
+                            hoursToFill = '4';
+                        }
+                    }
+                    
                     newDailyData[dateStr] = {
                         hours: hoursToFill,
                         location: attendance[dateStr]?.location || employee.work_location || '',
@@ -148,6 +159,7 @@ export default function EmployeeAttendance() {
             alert('تمت التعبئة التلقائية بنجاح!');
         }
     };
+    // --- نهاية التصحيح ---
 
     if (loading) { return <div className="flex justify-center items-center h-screen"><Loader className="animate-spin text-blue-500" size={48} /></div>; }
     if (!employee) { return <div className="text-center py-10">لم يتم العثور على الموظف.</div>; }
