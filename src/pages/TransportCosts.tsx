@@ -1,3 +1,5 @@
+// --- START OF FILE src/pages/TransportCosts.tsx (النسخة الكاملة والمحسّنة) ---
+
 import React, { useEffect, useState, useMemo } from "react";
 import * as XLSX from "xlsx";
 import { useNavigate } from 'react-router-dom';
@@ -13,7 +15,6 @@ const years = getYearsList();
 
 const getInitialPeriod = () => {
     const today = new Date();
-    // If it's the 26th or later, default to the next month's payroll
     if (today.getDate() >= 26) {
         today.setMonth(today.getMonth() + 1);
     }
@@ -41,10 +42,20 @@ export default function TransportCosts() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showInactive, setShowInactive] = useState(false);
   const [isDriverActive, setIsDriverActive] = useState(true);
-  
+
+  // --- بداية التعديل 1: إضافة State للفلاتر ---
+  const [filterLocation, setFilterLocation] = useState('all');
+  const [filterSource, setFilterSource] = useState('all');
+  // --- نهاية التعديل 1 ---
+
   const periodKey = `${selectedPeriod.year}-${selectedPeriod.month.toString().padStart(2, '0')}`;
   const days = useMemo(() => getPayrollDays(selectedPeriod.year, selectedPeriod.month), [selectedPeriod]);
   const dayStrings = useMemo(() => days.map(d => toYMDString(d)), [days]);
+
+  // --- بداية التعديل 2: إنشاء قوائم فريدة للفلاتر ---
+  const uniqueLocations = useMemo(() => [...new Set(drivers.map(d => d.work_location))].filter(Boolean), [drivers]);
+  const uniqueSources = useMemo(() => [...new Set(drivers.map(d => d.payment_source))].filter(Boolean), [drivers]);
+  // --- نهاية التعديل 2 ---
 
   useEffect(() => {
     fetchData();
@@ -83,13 +94,9 @@ export default function TransportCosts() {
     setIsDriverActive(true);
   };
 
-  // --- START OF CORRECTION ---
   const handleDriverSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const form = e.target as HTMLFormElement;
-
-    // **التصحيح الرئيسي هنا**
-    // أسماء المفاتيح (مثل work_location) يجب أن تطابق أسماء الأعمدة في قاعدة بيانات Supabase
     const driverData = { 
         name: (form.elements.namedItem('name') as HTMLInputElement).value, 
         work_location: (form.elements.namedItem('workLocation') as HTMLInputElement).value, 
@@ -100,34 +107,21 @@ export default function TransportCosts() {
 
     if (editingDriver) {
       const { error } = await supabase.from('drivers').update(driverData).eq('id', editingDriver.id);
-      if (error) {
-        console.error("Supabase update error:", error);
-        alert("فشل تحديث بيانات السائق. تحقق من الـ Console لمزيد من التفاصيل.");
-      }
+      if (error) { console.error("Update Error:", error); alert("فشل تحديث السائق"); }
     } else {
-      // عند الإضافة، لا نرسل `is_active` من الحالة، بل نجعلها `true` دائماً
       const { error } = await supabase.from('drivers').insert({ ...driverData, is_active: true });
-      if (error) {
-        console.error("Supabase insert error:", error);
-        alert("فشل إضافة السائق. تحقق من الـ Console لمزيد من التفاصيل.");
-      }
+      if (error) { console.error("Insert Error:", error); alert("فشل إضافة السائق"); }
     }
-
     handleCancelEdit();
     form.reset();
-    fetchData(); // إعادة تحميل البيانات لإظهار التغييرات
+    fetchData();
   };
-  // --- END OF CORRECTION ---
 
   const deleteDriver = async (driverId: number) => {
-    if (window.confirm("هل أنت متأكد من حذف هذا السائق؟ لا يمكن التراجع عن هذا الإجراء.")) {
+    if (window.confirm("هل أنت متأكد؟")) {
       const { error } = await supabase.from('drivers').delete().eq('id', driverId);
-      if (error) {
-        console.error("Supabase delete error:", error);
-        alert("فشل حذف السائق.");
-      } else {
-        fetchData();
-      }
+      if (error) alert("فشل حذف السائق");
+      else fetchData();
     }
   };
   
@@ -186,28 +180,41 @@ export default function TransportCosts() {
       XLSX.writeFile(wb, `TransportCosts_${periodKey}.xlsx`);
   };
   
+  // --- بداية التعديل 3: تطبيق منطق الفرز ---
   const filteredDrivers = useMemo(() => 
     drivers.filter(driver => {
       const isActive = driver.is_active;
       const matchesSearch = driver.name.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesLocation = filterLocation === 'all' || driver.work_location === filterLocation;
+      const matchesSource = filterSource === 'all' || driver.payment_source === filterSource;
+
       if (showInactive) {
-        return matchesSearch;
+        return matchesSearch && matchesLocation && matchesSource;
       }
-      return isActive && matchesSearch;
+      return isActive && matchesSearch && matchesLocation && matchesSource;
     })
-  , [drivers, searchTerm, showInactive]);
+  , [drivers, searchTerm, showInactive, filterLocation, filterSource]); // إضافة الفلاتر للمصفوفة
+  // --- نهاية التعديل 3 ---
 
   if (loading) { return <div className="flex justify-center items-center h-screen"><Loader className="animate-spin text-blue-500" /></div>; }
   
   return (
     <div className="space-y-6 p-4 md:p-6" dir="rtl">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-          <h1 className="text-3xl font-bold">تكاليف النقل</h1>
+      {/* --- بداية التعديل 4: إضافة الفلاتر لواجهة المستخدم --- */}
+      <div className="bg-white p-6 rounded-lg shadow-md grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-center">
+          <div className="lg:col-span-2">
+            <h1 className="text-3xl font-bold">تكاليف النقل</h1>
+          </div>
           <div className="flex items-center gap-2">
-            <select className="border rounded px-2 py-1" value={selectedPeriod.month} onChange={(e) => setSelectedPeriod({...selectedPeriod, month: Number(e.target.value)})}>{months.map(m => <option key={m.value} value={m.value}>{m.name}</option>)}</select>
-            <select className="border rounded px-2 py-1" value={selectedPeriod.year} onChange={(e) => setSelectedPeriod({...selectedPeriod, year: Number(e.target.value)})}>{years.map(y => <option key={y}>{y}</option>)}</select>
+            <label className="text-sm">الشهر</label>
+            <select className="w-full p-2 border rounded-md" value={selectedPeriod.month} onChange={(e) => setSelectedPeriod({...selectedPeriod, month: Number(e.target.value)})}>{months.map(m => <option key={m.value} value={m.value}>{m.name}</option>)}</select>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-sm">السنة</label>
+            <select className="w-full p-2 border rounded-md" value={selectedPeriod.year} onChange={(e) => setSelectedPeriod({...selectedPeriod, year: Number(e.target.value)})}>{years.map(y => <option key={y}>{y}</option>)}</select>
           </div>
       </div>
+      {/* --- نهاية التعديل 4 --- */}
       
       {can('add', 'Transport') && (
         <div className="bg-white p-6 rounded-lg shadow">
@@ -234,9 +241,19 @@ export default function TransportCosts() {
       )}
       
       <div className="bg-white p-4 rounded-lg shadow overflow-x-auto">
-        <div className="flex justify-between items-center mb-4">
-            <div className="flex items-center gap-4">
-                <div className="relative"><Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} /><input type="text" placeholder="بحث بالاسم..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full md:w-64 px-4 py-2 pr-10 border rounded-lg" /></div>
+        <div className="flex flex-wrap justify-between items-center mb-4 gap-4">
+            <div className="flex items-center gap-4 flex-wrap">
+                <div className="relative"><Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} /><input type="text" placeholder="بحث بالاسم..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full md:w-48 px-4 py-2 pr-10 border rounded-lg" /></div>
+                {/* --- بداية التعديل 5: إضافة الفلاتر للجدول --- */}
+                <select value={filterLocation} onChange={e => setFilterLocation(e.target.value)} className="p-2 border rounded-md">
+                    <option value="all">كل المواقع</option>
+                    {uniqueLocations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
+                </select>
+                <select value={filterSource} onChange={e => setFilterSource(e.target.value)} className="p-2 border rounded-md">
+                    <option value="all">كل جهات الصرف</option>
+                    {uniqueSources.map(src => <option key={src} value={src}>{src}</option>)}
+                </select>
+                {/* --- نهاية التعديل 5 --- */}
                 <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} className="h-5 w-5 rounded" /><span>إظهار غير النشطين</span></label>
             </div>
             <div className="flex gap-2">
@@ -247,7 +264,11 @@ export default function TransportCosts() {
         <table className="min-w-full table-auto border">
           <thead className="bg-gray-100 text-sm text-gray-700">
             <tr>
-              <th className="border px-2 py-1">الاسم</th><th className="border px-2 py-1">قيمة اليوم</th><th className="border px-2 py-1">عدد الأيام</th>
+              <th className="border px-2 py-1">الاسم</th>
+              {/* --- بداية التعديل 6: إضافة عمود جهة الصرف --- */}
+              <th className="border px-2 py-1">جهة الصرف</th>
+              {/* --- نهاية التعديل 6 --- */}
+              <th className="border px-2 py-1">قيمة اليوم</th><th className="border px-2 py-1">عدد الأيام</th>
               <th className="border px-2 py-1">مستحقات</th><th className="border px-2 py-1">خصومات</th>
               <th className="border px-2 py-1">الإجمالي</th>
               {days.map((day, index) => {
@@ -267,7 +288,11 @@ export default function TransportCosts() {
               const { totalDays, totalCost, extrasTotal, deductionsTotal } = getDriverTotal(driver.id);
               return (
                 <tr key={driver.id} className={`text-center text-sm ${!driver.is_active ? 'bg-gray-200 text-gray-500 italic' : 'hover:bg-gray-50'}`}>
-                  <td className="border px-2 py-1 font-medium text-gray-800">{driver.name}</td><td>{driver.daily_rate}</td>
+                  <td className="border px-2 py-1 font-medium text-gray-800">{driver.name}</td>
+                  {/* --- بداية التعديل 7: عرض بيانات جهة الصرف --- */}
+                  <td className="border px-2 py-1">{driver.payment_source}</td>
+                  {/* --- نهاية التعديل 7 --- */}
+                  <td>{driver.daily_rate}</td>
                   <td className="font-bold">{totalDays}</td><td>{extrasTotal}</td><td>{deductionsTotal}</td>
                   <td className="font-bold text-base text-blue-700">{totalCost}</td>
                   {dayStrings.map((date, index) => (
